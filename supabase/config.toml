@@ -1,0 +1,2 @@
+[functions.cleanup-pending-orders]
+schedule = "*/5 * * * *"
