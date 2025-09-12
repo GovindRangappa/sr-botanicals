@@ -1,4 +1,11 @@
 // src/pages/cart.tsx
+
+// stops Next from prerendering this page at build time
+export async function getServerSideProps() {
+  return { props: {} };
+}
+
+
 import NavBar from '@/components/NavBar';
 import Footer from '@/components/Footer';
 import Image from 'next/image';

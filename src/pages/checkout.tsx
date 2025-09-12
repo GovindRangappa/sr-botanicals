@@ -1,6 +1,13 @@
 // pages/checkout.tsx
 'use client';
 
+
+// stops Next from prerendering this page at build time
+export async function getServerSideProps() {
+  return { props: {} };
+}
+
+
 import NavBar from '@/components/NavBar';
 import { useState, useEffect, useRef } from 'react';
 import { useCart } from '@/context/CartContext';

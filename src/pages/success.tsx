@@ -1,5 +1,12 @@
 "use client";
 
+
+// stops Next from prerendering this page at build time
+export async function getServerSideProps() {
+  return { props: {} };
+}
+
+
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
