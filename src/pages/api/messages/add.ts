@@ -6,7 +6,7 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
-  const { first_name, last_name, email, message, sender = 'customer', type = 'text' } = req.body;
+  const { first_name, last_name, email, phone, message, sender = 'customer', type = 'text' } = req.body;
   if (!first_name || !last_name || !email || !message) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
@@ -15,7 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // 1️⃣ Check if customer exists by email
     const { data: existingCustomer, error: customerError } = await supabase
       .from('customers')
-      .select('*')
+      .select('id, phone')
       .eq('email', email)
       .single();
 
@@ -30,12 +30,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!customerId) {
       const { data: newCustomer, error: insertError } = await supabase
         .from('customers')
-        .insert([{ first_name, last_name, email }])
+        .insert([{ first_name, last_name, email, phone: phone ?? null }])
         .select()
         .single();
 
       if (insertError) throw insertError;
       customerId = newCustomer.id;
+    } else if (phone && !existingCustomer.phone) {
+      const { error: updateError } = await supabase
+        .from('customers')
+        .update({ phone })
+        .eq('id', existingCustomer.id);
+
+      if (updateError) throw updateError;
     }
 
     // 3️⃣ Insert the message linked to customer

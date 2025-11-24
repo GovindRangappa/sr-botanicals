@@ -16,6 +16,7 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [showManualOrderModal, setShowManualOrderModal] = useState(false);
+  const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
   const router = useRouter();
 
   const allowedEmails = ['ivygovind@gmail.com', 'srbotanicals@gmail.com'];
@@ -48,7 +49,7 @@ export default function AdminOrdersPage() {
     checkAccessAndFetchOrders();
   }, [router]);
 
-  const handleViewSlip = async (orderId: number) => {
+  const handleViewSlip = async (orderId: string) => {
     try {
       const res = await fetch(`/api/generate-packing-slip?orderId=${orderId}`);
       const blob = await res.blob();
@@ -59,7 +60,7 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const handleFulfillmentChange = async (orderId: number, newStatus: string) => {
+  const handleFulfillmentChange = async (orderId: string, newStatus: string) => {
     try {
       const { error } = await supabase
         .from('orders')
@@ -76,6 +77,30 @@ export default function AdminOrdersPage() {
     } catch (err) {
       console.error('Failed to update fulfillment status:', err);
       alert('Could not update fulfillment status. Please try again.');
+    }
+  };
+
+  const handleViewInvoice = async (orderId: string) => {
+    try {
+      setInvoiceLoadingId(orderId);
+      const res = await fetch(`/api/orders/invoice-link?orderId=${orderId}`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch invoice');
+      }
+
+      const data = await res.json();
+      const url = data.hostedInvoiceUrl || data.invoicePdfUrl || data.receiptUrl;
+
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        alert('No invoice or receipt is available for this order yet.');
+      }
+    } catch (err) {
+      console.error('Failed to open invoice:', err);
+      alert('Could not load the invoice. Please try again later.');
+    } finally {
+      setInvoiceLoadingId(null);
     }
   };
 
@@ -242,13 +267,22 @@ export default function AdminOrdersPage() {
                             )}
 
                             <td rowSpan={productList.length} className="px-1 sm:px-2 py-2 sm:py-4 align-middle text-center">
-                              <button
-                                onClick={() => handleViewSlip(order.id)}
-                                className="bg-[#2f5d50] text-white px-1 sm:px-2 py-1 rounded hover:bg-[#24493f] text-xs whitespace-nowrap"
-                              >
-                                Packing <br /> 
-                                Slip
-                              </button>
+                              <div className="flex flex-col items-stretch gap-2">
+                                <button
+                                  onClick={() => handleViewSlip(order.id)}
+                                  className="bg-[#2f5d50] text-white px-1 sm:px-2 py-1 rounded hover:bg-[#24493f] text-xs whitespace-nowrap"
+                                >
+                                  Packing <br />
+                                  Slip
+                                </button>
+                                <button
+                                  onClick={() => handleViewInvoice(order.id)}
+                                  className="bg-[#184c43] text-white px-1 sm:px-2 py-1 rounded hover:bg-[#12362f] text-xs whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+                                  disabled={invoiceLoadingId === order.id}
+                                >
+                                  {invoiceLoadingId === order.id ? 'Loading…' : 'Invoice'}
+                                </button>
+                              </div>
                             </td>
                           </>
                         )}

@@ -17,10 +17,12 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
     email: '',
     firstName: '',
     lastName: '',
+    phone: '',
     street: '',
     city: '',
     state: '',
     zip: '',
+    shippingType: '',
     shippingRateId: '',
     shippingMethod: '',
     shipmentId: '',
@@ -43,6 +45,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
     formData.email.trim() !== '' &&
     formData.firstName.trim() !== '' &&
     formData.lastName.trim() !== '' &&
+    /^\+?[0-9\s().-]{7,20}$/.test(formData.phone.trim()) &&
     formData.shippingType !== '' &&
     formData.paymentMethod !== '' &&
     (
@@ -97,39 +100,73 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
-    if (!window.google || !autocompleteRef.current) return;
+    if (!autocompleteRef.current) return;
 
-    const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
-      types: ['address'],
-      componentRestrictions: { country: 'us' },
-    });
+    // Wait for Google Maps to load
+    const initAutocomplete = () => {
+      if (!window.google?.maps?.places || !autocompleteRef.current) return;
 
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (!place.address_components) return;
-
-      const address: any = { street: '', city: '', state: '', zip: '' };
-      place.address_components.forEach(component => {
-        const types = component.types;
-        if (types.includes('street_number')) address.street = component.long_name;
-        if (types.includes('route')) address.street += ` ${component.long_name}`;
-        if (types.includes('locality')) address.city = component.long_name;
-        if (types.includes('administrative_area_level_1')) address.state = component.short_name;
-        if (types.includes('postal_code')) address.zip = component.long_name;
+      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
       });
 
-      setFormData(prev => ({
-        ...prev,
-        street: address.street.trim(),
-        city: address.city,
-        state: address.state,
-        zip: address.zip,
-      }));
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
 
-      if (autocompleteRef.current) {
-        autocompleteRef.current.value = `${address.street.trim()}, ${address.city}, ${address.state}, ${address.zip}`;
+        const address: any = { street: '', city: '', state: '', zip: '' };
+        place.address_components.forEach(component => {
+          const types = component.types;
+          if (types.includes('street_number')) address.street = component.long_name;
+          if (types.includes('route')) address.street += ` ${component.long_name}`;
+          if (types.includes('locality')) address.city = component.long_name;
+          if (types.includes('administrative_area_level_1')) address.state = component.short_name;
+          if (types.includes('postal_code')) address.zip = component.long_name;
+        });
+
+        setFormData(prev => ({
+          ...prev,
+          street: address.street.trim(),
+          city: address.city,
+          state: address.state,
+          zip: address.zip,
+        }));
+
+        if (autocompleteRef.current) {
+          autocompleteRef.current.value = `${address.street.trim()}, ${address.city}, ${address.state}, ${address.zip}`;
+        }
+      });
+    };
+
+    // Check if already loaded
+    if (window.google?.maps?.places) {
+      initAutocomplete();
+    } else {
+      // Wait for the load event
+      const handleLoad = () => {
+        initAutocomplete();
+      };
+      
+      if ((window as any).googleMapsLoaded) {
+        initAutocomplete();
+      } else {
+        window.addEventListener('googlemapsloaded', handleLoad);
+        // Fallback: check periodically
+        const checkInterval = setInterval(() => {
+          if (window.google?.maps?.places) {
+            clearInterval(checkInterval);
+            initAutocomplete();
+          }
+        }, 100);
+
+        // Cleanup
+        return () => {
+          window.removeEventListener('googlemapsloaded', handleLoad);
+          clearInterval(checkInterval);
+        };
       }
-    });
+    }
   }, [shippingType]);
 
   const filteredProducts = allProducts.filter(p =>
@@ -270,6 +307,58 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
         return;
     }
 
+    try {
+        const { data: existingCustomer, error: customerLookupError } = await supabase
+            .from('customers')
+            .select('id, first_name, last_name, phone')
+            .eq('email', formData.email)
+            .single();
+
+        if (customerLookupError && customerLookupError.code !== 'PGRST116') {
+            throw customerLookupError;
+        }
+
+        if (!existingCustomer) {
+            const { error: insertCustomerError } = await supabase.from('customers').insert([
+                {
+                    first_name: formData.firstName,
+                    last_name: formData.lastName,
+                    email: formData.email,
+                    phone: formData.phone,
+                },
+            ]);
+
+            if (insertCustomerError) {
+                console.error('❗ Failed to insert customer record', insertCustomerError);
+            }
+        } else {
+            const updates: Record<string, string> = {};
+
+            if (!existingCustomer.first_name && formData.firstName) {
+                updates.first_name = formData.firstName;
+            }
+            if (!existingCustomer.last_name && formData.lastName) {
+                updates.last_name = formData.lastName;
+            }
+            if (formData.phone && formData.phone !== (existingCustomer as any).phone) {
+                updates.phone = formData.phone;
+            }
+
+            if (Object.keys(updates).length > 0) {
+                const { error: updateCustomerError } = await supabase
+                    .from('customers')
+                    .update(updates)
+                    .eq('id', existingCustomer.id);
+
+                if (updateCustomerError) {
+                    console.error('❗ Failed to update customer record', updateCustomerError);
+                }
+            }
+        }
+    } catch (customerSyncError) {
+        console.error('❗ Customer sync error:', customerSyncError);
+    }
+
     // 🔁 Create Stripe invoice for both cash and card orders
     const invoicePayload = {
         first_name: formData.firstName,
@@ -328,6 +417,19 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
                 placeholder="Email"
                 value={formData.email}
                 onChange={e => setFormData({ ...formData, email: e.target.value })}
+            />
+        </div>
+
+        <div className="mb-4">
+            <label className="block mb-1 font-semibold">
+                Phone Number <span className="text-red-600">*</span>
+            </label>
+            <input
+                required
+                className="border p-2 rounded w-full"
+                placeholder="Phone Number"
+                value={formData.phone}
+                onChange={e => setFormData({ ...formData, phone: e.target.value })}
             />
         </div>
 

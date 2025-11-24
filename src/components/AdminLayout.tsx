@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 const adminLinks = [
   { name: 'Orders', path: '/admin/orders' },
+  { name: 'Customer Memory', path: '/admin/customers' },
   { name: 'Sales Analytics', path: '/admin/sales-analytics' },
   { name: 'Add Product', path: '/admin/add-product' },
   { name: 'Edit Product', path: '/admin/edit-product' },

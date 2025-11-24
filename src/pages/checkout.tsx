@@ -27,6 +27,7 @@ export default function CheckoutPage() {
     firstName: '',
     lastName: '',
     email: '',
+    phone: '',
     street: '',
     city: '',
     state: '',
@@ -40,50 +41,85 @@ export default function CheckoutPage() {
   const [selectedRate, setSelectedRate] = useState<string>('');
   const [loadingRates, setLoadingRates] = useState(false);
   const [bestRateId, setBestRateId] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const autocompleteRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!window.google || !autocompleteRef.current) return;
+    if (!autocompleteRef.current) return;
 
-    const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
-      types: ['address'],
-      componentRestrictions: { country: 'us' },
-    });
+    // Wait for Google Maps to load
+    const initAutocomplete = () => {
+      if (!window.google?.maps?.places || !autocompleteRef.current) return;
 
-    autocomplete.addListener('place_changed', () => {
-      const place = autocomplete.getPlace();
-      if (!place.address_components) return;
-
-      const addressComponents: any = {
-        street: '',
-        city: '',
-        state: '',
-        zip: '',
-      };
-
-      place.address_components.forEach(component => {
-        const types = component.types;
-        if (types.includes('street_number')) addressComponents.street = component.long_name;
-        if (types.includes('route')) addressComponents.street += ` ${component.long_name}`;
-        if (types.includes('locality')) addressComponents.city = component.long_name;
-        if (types.includes('administrative_area_level_1')) addressComponents.state = component.short_name;
-        if (types.includes('postal_code')) addressComponents.zip = component.long_name;
+      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
       });
 
-      setShippingInfo(prev => ({
-        ...prev,
-        street: addressComponents.street.trim(),
-        city: addressComponents.city,
-        state: addressComponents.state,
-        zip: addressComponents.zip,
-        country: 'US',
-      }));
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
 
-      if (autocompleteRef.current) {
-        autocompleteRef.current.value = `${addressComponents.street.trim()}, ${addressComponents.city}, ${addressComponents.state}, ${addressComponents.zip}`;
+        const addressComponents: any = {
+          street: '',
+          city: '',
+          state: '',
+          zip: '',
+        };
+
+        place.address_components.forEach(component => {
+          const types = component.types;
+          if (types.includes('street_number')) addressComponents.street = component.long_name;
+          if (types.includes('route')) addressComponents.street += ` ${component.long_name}`;
+          if (types.includes('locality')) addressComponents.city = component.long_name;
+          if (types.includes('administrative_area_level_1')) addressComponents.state = component.short_name;
+          if (types.includes('postal_code')) addressComponents.zip = component.long_name;
+        });
+
+        setShippingInfo(prev => ({
+          ...prev,
+          street: addressComponents.street.trim(),
+          city: addressComponents.city,
+          state: addressComponents.state,
+          zip: addressComponents.zip,
+          country: 'US',
+        }));
+
+        if (autocompleteRef.current) {
+          autocompleteRef.current.value = `${addressComponents.street.trim()}, ${addressComponents.city}, ${addressComponents.state}, ${addressComponents.zip}`;
+        }
+      });
+    };
+
+    // Check if already loaded
+    if (window.google?.maps?.places) {
+      initAutocomplete();
+    } else {
+      // Wait for the load event
+      const handleLoad = () => {
+        initAutocomplete();
+      };
+      
+      if ((window as any).googleMapsLoaded) {
+        initAutocomplete();
+      } else {
+        window.addEventListener('googlemapsloaded', handleLoad);
+        // Fallback: check periodically
+        const checkInterval = setInterval(() => {
+          if (window.google?.maps?.places) {
+            clearInterval(checkInterval);
+            initAutocomplete();
+          }
+        }, 100);
+
+        // Cleanup
+        return () => {
+          window.removeEventListener('googlemapsloaded', handleLoad);
+          clearInterval(checkInterval);
+        };
       }
-    });
+    }
   }, []);
 
   const validateForm = async () => {
@@ -92,6 +128,8 @@ export default function CheckoutPage() {
     if (!shippingInfo.lastName.trim()) newErrors.lastName = 'Required';
     if (!shippingInfo.email.trim()) newErrors.email = 'Required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(shippingInfo.email)) newErrors.email = 'Invalid email';
+    if (!shippingInfo.phone.trim()) newErrors.phone = 'Required';
+    else if (!/^\+?[0-9\s().-]{7,20}$/.test(shippingInfo.phone.trim())) newErrors.phone = 'Invalid phone';
     if (!shippingInfo.street.trim()) newErrors.street = 'Required';
     if (!shippingInfo.city.trim()) newErrors.city = 'Required';
     if (!shippingInfo.state.trim()) newErrors.state = 'Required';
@@ -135,37 +173,52 @@ export default function CheckoutPage() {
   };
 
   const handleProceedToStripe = async () => {
-    const isFreeDelivery = selectedRate === 'local-pickup' || selectedRate === 'hand-delivery';
+    // Prevent double submission
+    if (isSubmitting) {
+      console.log('⚠️ Checkout already in progress, ignoring duplicate click');
+      return;
+    }
 
-    const res = await fetch('/api/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cart,
-        shippingInfo,
-        shippingRateId: isFreeDelivery ? null : selectedRate,
-        shippingMethod: isFreeDelivery
-          ? selectedRate === 'local-pickup'
-            ? 'Local Pickup'
-            : 'Hand Delivery (In Person)'
-          : null,
-        shipmentId: isFreeDelivery ? null : shipmentId,  // <-- new line
-      }),
-    });
+    setIsSubmitting(true);
 
-    const data = await res.json();
+    try {
+      const isFreeDelivery = selectedRate === 'local-pickup' || selectedRate === 'hand-delivery';
 
-    if (data.url) {
-      const currentUrl = window.location.pathname + window.location.search;
-      const targetUrl = new URL(data.url).pathname + new URL(data.url).search;
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cart,
+          shippingInfo,
+          shippingRateId: isFreeDelivery ? null : selectedRate,
+          shippingMethod: isFreeDelivery
+            ? selectedRate === 'local-pickup'
+              ? 'Local Pickup'
+              : 'Hand Delivery (In Person)'
+            : null,
+          shipmentId: isFreeDelivery ? null : shipmentId,
+        }),
+      });
 
-      if (currentUrl !== targetUrl) {
-        router.push(data.url);
+      const data = await res.json();
+
+      if (data.url) {
+        const currentUrl = window.location.pathname + window.location.search;
+        const targetUrl = new URL(data.url).pathname + new URL(data.url).search;
+
+        if (currentUrl !== targetUrl) {
+          router.push(data.url);
+        } else {
+          console.log("⚠️ Already on the target URL, skipping navigation.");
+        }
       } else {
-        console.log("⚠️ Already on the target URL, skipping navigation.");
+        alert(data.message || 'Checkout failed.');
+        setIsSubmitting(false); // Re-enable on error
       }
-    } else {
-      alert(data.message || 'Checkout failed.');
+    } catch (error) {
+      console.error('❌ Checkout error:', error);
+      alert('Checkout failed. Please try again.');
+      setIsSubmitting(false); // Re-enable on error
     }
   };
 
@@ -194,7 +247,11 @@ export default function CheckoutPage() {
     </div>
   );
 
-  const personalInfoValid = shippingInfo.firstName.trim() && shippingInfo.lastName.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(shippingInfo.email);
+  const personalInfoValid =
+    shippingInfo.firstName.trim() &&
+    shippingInfo.lastName.trim() &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(shippingInfo.email) &&
+    /^\+?[0-9\s().-]{7,20}$/.test(shippingInfo.phone.trim());
 
   return (
     <>
@@ -230,6 +287,7 @@ export default function CheckoutPage() {
             <div className="w-1/2">{renderInput('lastName', 'Last Name')}</div>
           </div>
           {renderInput('email', 'Email')}
+          {renderInput('phone', 'Phone Number', 'tel')}
         </div>
 
 
@@ -296,10 +354,10 @@ export default function CheckoutPage() {
         <div className="text-center">
           <button
             onClick={handleProceedToStripe}
-            disabled={!selectedRate || !personalInfoValid}
+            disabled={!selectedRate || !personalInfoValid || isSubmitting}
             className="bg-[#2f5d50] hover:bg-[#24493f] text-white font-medium px-8 py-3 rounded-full shadow-md disabled:opacity-50 transition-all"
           >
-            Proceed to Payment
+            {isSubmitting ? 'Processing...' : 'Proceed to Payment'}
           </button>
         </div>
       </div>

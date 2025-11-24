@@ -145,6 +145,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       customer: customerId,
     });
 
+    // ✅ Check if order with this checkout_id already exists (prevent duplicates)
+    const { data: existingOrder, error: checkError } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('stripe_checkout_id', session.id)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      // PGRST116 = "not found" error, which is expected for new orders
+      console.error('❗ Error checking for existing order:', checkError);
+      return res.status(500).json({ message: "Failed to check for existing order" });
+    }
+
+    if (existingOrder) {
+      console.log('⚠️ Order with this checkout_id already exists:', existingOrder.id);
+      // Return the existing session URL instead of creating a duplicate
+      return res.status(200).json({ url: session.url });
+    }
+
+    // ✅ Ensure customer record exists / is updated
+    try {
+      const { data: existingCustomer, error: customerLookupError } = await supabase
+        .from('customers')
+        .select('id, first_name, last_name, phone')
+        .eq('email', shippingInfo.email)
+        .single();
+
+      if (customerLookupError && customerLookupError.code !== 'PGRST116') {
+        throw customerLookupError;
+      }
+
+      if (!existingCustomer) {
+        const { error: insertCustomerError } = await supabase.from('customers').insert([
+          {
+            first_name: shippingInfo.firstName,
+            last_name: shippingInfo.lastName,
+            email: shippingInfo.email,
+            phone: shippingInfo.phone ?? null,
+          },
+        ]);
+
+        if (insertCustomerError) {
+          console.error('❗ Failed to insert customer record', insertCustomerError);
+        }
+      } else {
+        const updates: Record<string, string> = {};
+
+        if (!existingCustomer.first_name && shippingInfo.firstName) {
+          updates.first_name = shippingInfo.firstName;
+        }
+        if (!existingCustomer.last_name && shippingInfo.lastName) {
+          updates.last_name = shippingInfo.lastName;
+        }
+        if (shippingInfo.phone && shippingInfo.phone !== (existingCustomer as any).phone) {
+          updates.phone = shippingInfo.phone;
+        }
+
+        if (Object.keys(updates).length > 0) {
+          const { error: updateCustomerError } = await supabase
+            .from('customers')
+            .update(updates)
+            .eq('id', existingCustomer.id);
+
+          if (updateCustomerError) {
+            console.error('❗ Failed to update customer record', updateCustomerError);
+          }
+        }
+      }
+    } catch (customerSyncError) {
+      console.error('❗ Customer sync error:', customerSyncError);
+    }
+
     // ✅ Supabase order logging
     const order = {
       stripe_checkout_id: session.id,

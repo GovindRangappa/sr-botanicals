@@ -47,10 +47,11 @@ export default function SalesAnalytics() {
   
   useEffect(() => {
     async function fetchAnalytics() {
+      // Build base query - fetch all orders first, then filter on client side
+      // This ensures we get orders that are paid or have payment processed
       let query = supabase
         .from("orders")
-        .select("id, created_at, customer_email, first_name, last_name, products")
-        .eq("status", "paid");
+        .select("id, created_at, customer_email, first_name, last_name, products, status, stripe_payment_intent_id");
 
       if (filter === "7" || filter === "30") {
         const days = parseInt(filter);
@@ -65,7 +66,19 @@ export default function SalesAnalytics() {
           .lte("created_at", toDate.toISOString());
       }
 
-      const { data: salesData } = await query;
+      const { data: allOrders, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching sales data:', error);
+        return;
+      }
+
+      // Filter to only include paid orders or orders with payment intent (indicating payment processed)
+      const salesData = (allOrders || []).filter(order => 
+        order.status === 'paid' || 
+        order.status === 'complete' || 
+        order.stripe_payment_intent_id !== null
+      );
 
       if (salesData) {
         const total = salesData.reduce((sum, order) => {
@@ -233,7 +246,7 @@ export default function SalesAnalytics() {
             >
                 <div>
                 <p className="font-semibold">{order.customer_name || "Unknown Customer"}</p>
-                <p className="text-sm text-gray-600">{order.product_name} × {order.quantity}</p>
+                <p className="text-sm text-gray-600">{order.name} × {order.quantity}</p>
                 </div>
                 <div className="text-right">
                 <p className="font-semibold">${(order.price * order.quantity).toFixed(2)}</p>
