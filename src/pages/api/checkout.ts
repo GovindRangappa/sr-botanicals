@@ -14,6 +14,19 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Fallback image URL (use your actual logo or a default product image)
+const FALLBACK_IMAGE = "https://sr-botanicals.vercel.app/android-chrome-512x512.png";
+
+// Validate and sanitize image URLs for Stripe
+function getSafeImageUrl(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  // Stripe requires absolute URLs (http:// or https://)
+  if (!/^https?:\/\//i.test(trimmed)) return undefined;
+  return trimmed;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method not allowed" });
@@ -82,17 +95,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ✅ Stripe line items
     const line_items = [
-      ...cart.map((item: any) => ({
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: item.name,
-            images: [item.image],
+      ...cart.map((item: any) => {
+        // Try to get image from various possible locations
+        const rawImage = item.image || item.product?.image || item.product_image;
+        const safeImage = getSafeImageUrl(rawImage) ?? FALLBACK_IMAGE;
+
+        const product_data: Stripe.Checkout.SessionCreateParams.LineItem.PriceData.ProductData = {
+          name: item.name,
+          // Only send images if we have a valid URL
+          ...(safeImage && getSafeImageUrl(safeImage) ? { images: [safeImage] } : {}),
+        };
+
+        return {
+          price_data: {
+            currency: "usd",
+            unit_amount: Math.round(item.price * 100),
+            product_data,
           },
-          unit_amount: Math.round(item.price * 100),
-        },
-        quantity: item.quantity,
-      })),
+          quantity: item.quantity,
+        };
+      }),
       ...(shippingAmount > 0
         ? [{
             price_data: {
@@ -134,6 +156,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
       customerId = newCustomer.id;
     }
+
+    // (Optional but helpful) Log what you send
+    console.log("LINE ITEMS TO STRIPE:", JSON.stringify(line_items, null, 2));
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
