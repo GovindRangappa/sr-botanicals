@@ -13,6 +13,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useCart } from '@/context/CartContext';
 import { useRouter } from 'next/router';
 import Footer from '@/components/Footer';
+import Script from 'next/script';
 
 export default function CheckoutPage() {
   const { cart } = useCart();
@@ -46,10 +47,7 @@ export default function CheckoutPage() {
   const autocompleteRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!autocompleteRef.current) return;
-
-    // Wait for Google Maps to load
-    const initAutocomplete = () => {
+    function initAutocomplete() {
       if (!window.google?.maps?.places || !autocompleteRef.current) return;
 
       const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
@@ -90,36 +88,15 @@ export default function CheckoutPage() {
           autocompleteRef.current.value = `${addressComponents.street.trim()}, ${addressComponents.city}, ${addressComponents.state}, ${addressComponents.zip}`;
         }
       });
-    };
-
-    // Check if already loaded
-    if (window.google?.maps?.places) {
-      initAutocomplete();
-    } else {
-      // Wait for the load event
-      const handleLoad = () => {
-        initAutocomplete();
-      };
-      
-      if ((window as any).googleMapsLoaded) {
-        initAutocomplete();
-      } else {
-        window.addEventListener('googlemapsloaded', handleLoad);
-        // Fallback: check periodically
-        const checkInterval = setInterval(() => {
-          if (window.google?.maps?.places) {
-            clearInterval(checkInterval);
-            initAutocomplete();
-          }
-        }, 100);
-
-        // Cleanup
-        return () => {
-          window.removeEventListener('googlemapsloaded', handleLoad);
-          clearInterval(checkInterval);
-        };
-      }
     }
+
+    // Wait for Google Maps script to load
+    window.addEventListener('googleMapsLoaded', initAutocomplete);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('googleMapsLoaded', initAutocomplete);
+    };
   }, []);
 
   const validateForm = async () => {
@@ -253,8 +230,23 @@ export default function CheckoutPage() {
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(shippingInfo.email) &&
     /^\+?[0-9\s().-]{7,20}$/.test(shippingInfo.phone.trim());
 
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
   return (
     <>
+      {googleMapsApiKey && (
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
+          strategy="afterInteractive"
+          onLoad={() => {
+            console.log('Google Maps script loaded');
+            window.dispatchEvent(new Event('googleMapsLoaded'));
+          }}
+          onError={() => {
+            console.error('Google Maps API failed to load. Please check your API key and ensure Maps JavaScript API and Places API are enabled.');
+          }}
+        />
+      )}
     <main className="bg-[#f5f2e8] min-h-screen py-20 px-4 font-['Playfair_Display'] text-[#3c2f2f]">
       <div className="max-w-6xl mx-auto mt-6 px-4">
         <button
