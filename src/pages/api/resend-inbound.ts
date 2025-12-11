@@ -29,6 +29,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const htmlBody = emailData.html || "";
     const message = textBody?.trim() || htmlBody?.trim() || "(No message)";
 
+    // 🔥 DEBUG LOG
+    console.log("🚀 INBOUND EMAIL RECEIVED:", {
+    cleanEmail,
+    subject,
+    message
+    });
+
     // 2️⃣ Lookup customer by email
     const { data: customer, error: customerError } = await supabase
       .from('customers')
