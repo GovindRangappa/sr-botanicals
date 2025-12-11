@@ -30,7 +30,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // 3️⃣ Send email via Resend
     await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: 'support@sr-botanicals.com',
+      reply_to: 'support@sr-botanicals.com',
       to: customer.email,
       subject: `Reply from SR Botanicals`,
       html: `
