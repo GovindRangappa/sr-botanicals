@@ -14,56 +14,75 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).send("OK");
   }
 
-  // 2️⃣ Only allow POST for actual inbound email events
+  // 2️⃣ Only allow POST for inbound events
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   try {
     const event = req.body;
+    console.log("🔥 FULL EVENT PAYLOAD:", JSON.stringify(event, null, 2));
 
-    // Real inbound email events come as type = "email.received"
-    if (event.type !== 'email.received') {
+    // Ignore non-email events
+    if (event.type !== "email.received") {
       return res.status(200).json({ ignored: true });
     }
 
     const emailData = event.data;
 
+    // Extract clean customer email
     const fromEmail = emailData.from;
     const cleanEmail = fromEmail.match(/<(.+)>/)?.[1] || fromEmail;
 
-    const subject = emailData.subject || "";
-    const textBody = emailData.text || "";
-    const htmlBody = emailData.html || "";
-    const message = textBody.trim() || htmlBody.trim() || "(No message)";
+    // Extract message from all possible fields
+    let message =
+      emailData.text ||
+      emailData.html ||
+      emailData.text_as_html ||
+      emailData.stripped_text ||
+      emailData.stripped_html ||
+      emailData.html_body ||
+      emailData.raw || // raw MIME (Gmail often sends replies here)
+      "";
 
-    // Debug log - will show in Vercel logs
-    console.log("🚀 INBOUND EMAIL RECEIVED:", {
-      cleanEmail,
-      subject,
-      message
+    // Convert HTML to plain text fallback
+    if (!message && emailData.html) {
+      message = emailData.html.replace(/<[^>]+>/g, "").trim();
+    }
+
+    // Final fallback
+    if (!message || typeof message !== "string") {
+      message = "(No message)";
+    } else {
+      message = message.trim();
+    }
+
+    console.log("🚀 INBOUND EMAIL RECEIVED (parsed):", {
+      from: cleanEmail,
+      subject: emailData.subject || "",
+      parsedMessage: message
     });
 
-    // 3️⃣ Look up customer by email
+    // 3️⃣ Look up customer in Supabase
     const { data: customer, error: customerError } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('email', cleanEmail)
+      .from("customers")
+      .select("id")
+      .eq("email", cleanEmail)
       .single();
 
     if (customerError || !customer) {
-      console.error("❌ Unknown email; cannot map to customer:", cleanEmail);
+      console.error("❌ Unknown customer email replying:", cleanEmail);
       return res.status(200).json({ stored: false, reason: "Unknown email" });
     }
 
-    // 4️⃣ Insert into messages table
+    // 4️⃣ Insert message into conversation
     const { error: insertError } = await supabase
-      .from('messages')
+      .from("messages")
       .insert({
         customer_id: customer.id,
-        sender: 'customer',
-        message,
-        type: 'text'
+        sender: "customer",
+        message: message,
+        type: "text"
       });
 
     if (insertError) throw insertError;
@@ -74,6 +93,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   } catch (err) {
     console.error("🔥 Resend Inbound Handler Error:", err);
-    return res.status(500).json({ error: 'Server Error' });
+    return res.status(500).json({ error: "Server Error" });
   }
 }
