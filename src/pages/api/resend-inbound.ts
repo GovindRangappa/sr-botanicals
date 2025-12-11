@@ -7,6 +7,14 @@ const supabase = createClient(
 );
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+
+  // 1️⃣ Resend webhook verification (GET request)
+  if (req.method === 'GET') {
+    console.log("🔎 Resend verification GET received");
+    return res.status(200).send("OK");
+  }
+
+  // 2️⃣ Only allow POST for actual inbound email events
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
@@ -14,29 +22,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const event = req.body;
 
-    // 1️⃣ Verify inbound event type
+    // Real inbound email events come as type = "email.received"
     if (event.type !== 'email.received') {
       return res.status(200).json({ ignored: true });
     }
 
     const emailData = event.data;
 
-    const fromEmail = emailData.from; // Example: 'John Doe <john@gmail.com>'
+    const fromEmail = emailData.from;
     const cleanEmail = fromEmail.match(/<(.+)>/)?.[1] || fromEmail;
 
     const subject = emailData.subject || "";
     const textBody = emailData.text || "";
     const htmlBody = emailData.html || "";
-    const message = textBody?.trim() || htmlBody?.trim() || "(No message)";
+    const message = textBody.trim() || htmlBody.trim() || "(No message)";
 
-    // 🔥 DEBUG LOG
+    // Debug log - will show in Vercel logs
     console.log("🚀 INBOUND EMAIL RECEIVED:", {
-    cleanEmail,
-    subject,
-    message
+      cleanEmail,
+      subject,
+      message
     });
 
-    // 2️⃣ Lookup customer by email
+    // 3️⃣ Look up customer by email
     const { data: customer, error: customerError } = await supabase
       .from('customers')
       .select('id')
@@ -44,30 +52,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .single();
 
     if (customerError || !customer) {
-      console.error("UNKNOWN EMAIL REPLY — cannot map to customer:", cleanEmail);
+      console.error("❌ Unknown email; cannot map to customer:", cleanEmail);
       return res.status(200).json({ stored: false, reason: "Unknown email" });
     }
 
-    const customerId = customer.id;
-
-    // 3️⃣ Insert into messages table
+    // 4️⃣ Insert into messages table
     const { error: insertError } = await supabase
       .from('messages')
       .insert({
-        customer_id: customerId,
+        customer_id: customer.id,
         sender: 'customer',
-        message: message,
+        message,
         type: 'text'
       });
 
     if (insertError) throw insertError;
 
-    console.log("Inbound email saved for customer:", cleanEmail);
+    console.log("✅ Saved inbound email for:", cleanEmail);
 
     return res.status(200).json({ success: true });
 
   } catch (err) {
-    console.error("Resend Inbound Handler Error:", err);
+    console.error("🔥 Resend Inbound Handler Error:", err);
     return res.status(500).json({ error: 'Server Error' });
   }
 }
