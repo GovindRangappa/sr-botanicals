@@ -7,6 +7,7 @@ import Footer from '@/components/Footer';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { useCart } from '@/context/CartContext';
+import { BlocksIcon } from 'lucide-react';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,7 +18,7 @@ export const getStaticPaths: GetStaticPaths = async () => {
   const { data: products } = await supabase.from('products').select('slug');
   const paths =
     products?.map((product) => ({ params: { slug: product.slug } })) ?? [];
-  return { paths, fallback: false };
+  return { paths, fallback: 'blocking' };
 };
 
 export const getStaticProps: GetStaticProps = async ({ params }) => {
