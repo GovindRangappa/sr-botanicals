@@ -1,75 +1,96 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import type { NextApiRequest, NextApiResponse } from "next";
+import { createClient } from "@supabase/supabase-js";
+import fetch from "node-fetch";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+const RESEND_API_KEY = process.env.RESEND_API_KEY!;
 
-  // Verification GET request
-  if (req.method === 'GET') {
-    console.log("🔎 Resend verification GET received");
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Allow GET for verification
+  if (req.method === "GET") {
     return res.status(200).send("OK");
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   try {
     const event = req.body;
-    console.log("🔥 FULL EVENT PAYLOAD:", JSON.stringify(event, null, 2));
 
-    if (event.type !== 'email.received') {
+    if (event.type !== "email.received") {
       return res.status(200).json({ ignored: true });
     }
 
-    const emailData = event.data;
+    const emailId = event.data.email_id;
+    const from = event.data.from;
+    const subject = event.data.subject || "";
 
-    console.log("📩 EMAIL DATA RAW:", JSON.stringify(emailData, null, 2));
+    const cleanEmail = from.match(/<(.+)>/)?.[1] || from;
 
-    const fromEmail = emailData.from;
-    const cleanEmail = fromEmail.match(/<(.+)>/)?.[1] || fromEmail;
+    // 🔹 Fetch full email content from Resend
+    const emailRes = await fetch(
+      `https://api.resend.com/emails/receiving/${emailId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+        },
+      }
+    );
 
-    const message =
-      emailData.text ||
-      emailData.html ||
-      emailData.textAsHtml ||
-      emailData.textAsMarkdown ||
-      emailData.textAsMd ||
-      "(No message)";
+    const emailJson: any = await emailRes.json();
 
-    console.log("🚀 INBOUND EMAIL RECEIVED:", {
+    // Try all possible body locations
+    let message =
+      emailJson.text ||
+      emailJson.html ||
+      emailJson.text_as_html ||
+      emailJson.stripped_text ||
+      emailJson.stripped_html ||
+      "";
+
+    // Strip HTML if needed
+    if (message && message.includes("<")) {
+      message = message.replace(/<[^>]*>/g, "").trim();
+    }
+
+    if (!message) {
+      message = "(No message)";
+    }
+
+    console.log("📨 Parsed inbound email:", {
       from: cleanEmail,
-      subject: emailData.subject,
-      parsedMessage: message
+      subject,
+      message,
     });
 
+    // Lookup customer
     const { data: customer } = await supabase
-      .from('customers')
-      .select('id')
-      .eq('email', cleanEmail)
+      .from("customers")
+      .select("id")
+      .eq("email", cleanEmail)
       .single();
 
     if (!customer) {
-      console.error("❌ Unknown email:", cleanEmail);
+      console.warn("Unknown sender:", cleanEmail);
       return res.status(200).json({ stored: false });
     }
 
-    await supabase.from('messages').insert({
+    // Store message
+    await supabase.from("messages").insert({
       customer_id: customer.id,
-      sender: 'customer',
+      sender: "customer",
       message,
-      type: 'text'
+      type: "text",
     });
 
-    console.log("✅ Saved inbound email for:", cleanEmail);
     return res.status(200).json({ success: true });
-
   } catch (err) {
-    console.error("🔥 Error:", err);
-    return res.status(500).json({ error: 'Server Error' });
+    console.error("Inbound email error:", err);
+    return res.status(500).json({ error: "Server Error" });
   }
 }
