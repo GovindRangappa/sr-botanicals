@@ -28,6 +28,16 @@ function getSafeImageUrl(raw: unknown): string | undefined {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // 🔒 TEMPORARY SAFETY GUARD (remove or toggle when ready to launch)
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_LIVE_CHECKOUT !== "true"
+  ) {
+    return res.status(403).json({
+      message: "Checkout is temporarily disabled. Please try again later.",
+    });
+  }
+  
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method not allowed" });
   }
