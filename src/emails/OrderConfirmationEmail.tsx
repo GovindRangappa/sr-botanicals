@@ -91,7 +91,7 @@ export default function OrderConfirmationEmail({
 
           <Text style={styles.text}>
             {getOrderStatusIntro(shippingMethod, orderId)}
-        </Text>
+          </Text>
 
 
           <Hr style={styles.hr} />
