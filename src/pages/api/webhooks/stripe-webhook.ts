@@ -4,6 +4,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { Shippo } from 'shippo';
+import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmation";
 
 export const config = {
   api: {
@@ -117,96 +118,135 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const orderToUpdate = existingOrders[0];
       console.log('📝 Updating order ID:', orderToUpdate.id);
 
-      // Update the order - use order ID for more reliable matching
-      const { data: updatedOrder, error: updateError } = await supabase
-        .from('orders')
-        .update({
-          stripe_payment_intent_id: payment_intent as string,
-          stripe_customer_id: customer as string,
-          products,
-          subtotal,
-          status: 'paid',
-          fulfillment_status: 'unfulfilled',
-          payment_method: 'card',
-        })
-        .eq('id', orderToUpdate.id)
-        .select();
+      // Guard: Skip update if order is already paid (prevents redundant work on webhook retries)
+      if (orderToUpdate.status !== "paid") {
+        // Retrieve Stripe receipt URL
+        const paymentIntentObj = await stripe.paymentIntents.retrieve(
+            payment_intent as string,
+            { expand: ['latest_charge'] }
+        );
 
-      if (updateError) {
-        console.error('❗ Supabase update error:', updateError);
-        console.error('❗ Update details:', {
-          orderId: orderToUpdate.id,
-          checkoutId: checkout_id,
-          error: updateError.message,
-        });
-        res.status(500).end();
-        return;
-      } else {
-        console.log(`✅ Order ${orderToUpdate.id} updated successfully for session ${checkout_id}`);
-        console.log('✅ Updated order status:', updatedOrder?.[0]?.status);
-      }
+        let receiptUrl: string | null = null;
+        const latestCharge = paymentIntentObj.latest_charge;
+        if (latestCharge && typeof latestCharge !== 'string') {
+          receiptUrl = latestCharge.receipt_url ?? null;
+        } else if (latestCharge && typeof latestCharge === 'string') {
+          const charge = await stripe.charges.retrieve(latestCharge);
+          receiptUrl = charge.receipt_url ?? null;
+        }
 
-      // Use updated order data or fall back to original
-      const orderForLabel = updatedOrder && updatedOrder[0] ? updatedOrder[0] : orderToUpdate;
+        // Update the order - use order ID for more reliable matching
+        const { data: updatedOrder, error: updateError } = await supabase
+          .from('orders')
+          .update({
+            stripe_payment_intent_id: payment_intent as string,
+            stripe_customer_id: customer as string,
+            products,
+            subtotal,
+            status: 'paid',
+            fulfillment_status: 'unfulfilled',
+            payment_method: 'card',
+            stripe_receipt_url: receiptUrl,
+          })
+          .eq('id', orderToUpdate.id)
+          .select();
 
-      if (orderForLabel.shipment_id && orderForLabel.shipping_method !== 'Local Pickup' && orderForLabel.shipping_method !== 'Hand Delivery') {
-        try {
-          const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
-
-          console.log('🚚 Fetching shipment with ID:', orderForLabel.shipment_id);
-
-          const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${orderForLabel.shipment_id}`, {
-            headers: {
-              Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
-              'Content-Type': 'application/json',
-            },
+        if (updateError) {
+          console.error('❗ Supabase update error:', updateError);
+          console.error('❗ Update details:', {
+            orderId: orderToUpdate.id,
+            checkoutId: checkout_id,
+            error: updateError.message,
           });
+          res.status(500).end();
+          return;
+        } else {
+          console.log(`✅ Order ${orderToUpdate.id} updated successfully for session ${checkout_id}`);
+          console.log('✅ Updated order status:', updatedOrder?.[0]?.status);
+        }
 
-          const shipment = await shipmentRes.json();
+        // Use updated order data or fall back to original
+        const orderForLabel = updatedOrder && updatedOrder[0] ? updatedOrder[0] : orderToUpdate;
 
-          console.log('📦 Available rates:', shipment.rates);
-          console.log('🔍 Trying to match shipping_method:', orderForLabel.shipping_method);
+        // 📸 Send order confirmation email (only once)
+        if (!orderForLabel.confirmation_email_sent) {
+          try {
+            await sendOrderConfirmationEmail(orderForLabel);
 
-          const availableLabels = shipment.rates.map((r: any) => `${r.provider} ${r.servicelevel.name}`);
-          console.log('📬 Rate options available for matching:', availableLabels);
+            await supabase
+              .from("orders")
+              .update({ confirmation_email_sent: true })
+              .eq("id", orderForLabel.id);
 
-          const rate = shipment.rates.find((r: any) =>
-            `${r.provider} ${r.servicelevel.name}` === orderForLabel.shipping_method
-          );
+            console.log("✅ Order confirmation email sent");
+          } catch (emailErr) {
+            console.error("❌ Failed to send confirmation email:", emailErr);
+          }
+        } else {
+          console.log("ℹ️ Confirmation email already sent");
+        }
 
-          if (!rate) {
-            console.error("❌ Rate matching paid order not found");
-          } else {
-            console.log("✅ Matched rate:", rate);
-            const transaction = await shippo.transactions.create({
-              rate: rate.object_id,
-              labelFileType: "PDF",
-              async: false,
+        if (orderForLabel.shipment_id && orderForLabel.shipping_method !== 'Local Pickup' && orderForLabel.shipping_method !== 'Hand Delivery') {
+          try {
+            const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
+
+            console.log('🚚 Fetching shipment with ID:', orderForLabel.shipment_id);
+
+            const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${orderForLabel.shipment_id}`, {
+              headers: {
+                Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
+                'Content-Type': 'application/json',
+              },
             });
 
-            if (transaction.status === "SUCCESS") {
-              const { trackingNumber, labelUrl } = transaction;
+            const shipment = await shipmentRes.json();
 
-              const { error: labelUpdateError } = await supabase
-                .from('orders')
-                .update({
-                  tracking_number: trackingNumber,
-                  label_url: labelUrl,
-                })
-                .eq('id', orderForLabel.id);
+            console.log('📦 Available rates:', shipment.rates);
+            console.log('🔍 Trying to match shipping_method:', orderForLabel.shipping_method);
 
-              if (labelUpdateError) {
-                console.error("❗ Failed to update order with label:", labelUpdateError);
-              } else {
-                console.log("✅ Shipping label created & saved");
-              }
+            const availableLabels = shipment.rates.map((r: any) => `${r.provider} ${r.servicelevel.name}`);
+            console.log('📬 Rate options available for matching:', availableLabels);
+
+            const rate = shipment.rates.find((r: any) =>
+              `${r.provider} ${r.servicelevel.name}` === orderForLabel.shipping_method
+            );
+
+            if (!rate) {
+              console.error("❌ Rate matching paid order not found");
             } else {
-              console.error("❌ Shippo label creation failed:", transaction.messages);
+              console.log("✅ Matched rate:", rate);
+              const transaction = await shippo.transactions.create({
+                rate: rate.object_id,
+                labelFileType: "PDF",
+                async: false,
+              });
+
+              if (transaction.status === "SUCCESS") {
+                const { trackingNumber, labelUrl } = transaction;
+
+                const { error: labelUpdateError } = await supabase
+                  .from('orders')
+                  .update({
+                    tracking_number: trackingNumber,
+                    label_url: labelUrl,
+                  })
+                  .eq('id', orderForLabel.id);
+
+                if (labelUpdateError) {
+                  console.error("❗ Failed to update order with label:", labelUpdateError);
+                } else {
+                  console.log("✅ Shipping label created & saved");
+                }
+              } else {
+                console.error("❌ Shippo label creation failed:", transaction.messages);
+              }
             }
+          } catch (err) {
+            console.error("🚨 Error during label creation:", err);
           }
-        } catch (err) {
-          console.error("🚨 Error during label creation:", err);
         }
+      } else {
+        console.log(`ℹ️ Order ${orderToUpdate.id} is already paid, skipping update`);
       }
     }
 
