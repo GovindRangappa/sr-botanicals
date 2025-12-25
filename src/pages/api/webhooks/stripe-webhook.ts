@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Shippo } from 'shippo';
 import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmation";
 import { sendOwnerPickupNotificationEmail } from "@/lib/email/sendOwnerPickupNotification";
+import { sendOwnerShippingNotificationEmail } from "@/lib/email/sendOwnerShippingNotification";
 
 export const config = {
   api: {
@@ -203,6 +204,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             console.log("☑ Owner Local Pickup notification sent");
           } catch (err) {
             console.error("❌ Failed to send owner pickup notification:", err);
+          }
+        }
+
+        // ✅ Owner notification for shipping orders (send only once)
+        if (
+          orderForLabel.shipping_method !== "Local Pickup" &&
+          orderForLabel.shipping_method !== "Hand Delivery" &&
+          !orderForLabel.owner_shipping_email_sent
+        ) {
+          try {
+            await sendOwnerShippingNotificationEmail(orderForLabel);
+
+            await supabase
+              .from("orders")
+              .update({ owner_shipping_email_sent: true })
+              .eq("id", orderForLabel.id);
+
+            console.log("✔ Owner shipping notification sent");
+          } catch (err) {
+            console.error("❌ Failed to send owner shipping notification:", err);
           }
         }
 
