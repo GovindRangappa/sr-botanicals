@@ -31,6 +31,40 @@ interface OrderConfirmationEmailProps {
   receiptUrl?: string | null;
 }
 
+
+function getFulfillmentMessage(shippingMethod: string) {
+  switch (shippingMethod) {
+    case "Local Pickup":
+      return "We’ll reach out shortly to coordinate a pickup time.";
+
+    case "Hand Delivery":
+      return "Your order has been fulfilled. Thank you for supporting SR Botanicals 💚";
+
+    default:
+      return "We’ll notify you once your order ships and provide tracking information.";
+  }
+}
+
+
+function getOrderStatusIntro(
+  shippingMethod: string,
+  orderId: string | number
+) {
+  switch (shippingMethod) {
+    case "Local Pickup":
+      return `We’ve received your order #${orderId} and are preparing it for pickup.`;
+
+    case "Hand Delivery":
+      return `Your order #${orderId} has been completed. Thank you for shopping with SR Botanicals.`;
+
+    default:
+      return `We’ve received your order #${orderId} and are getting it ready for shipment.`;
+  }
+}
+
+
+
+
 export default function OrderConfirmationEmail({
   orderId,
   firstName,
@@ -56,9 +90,9 @@ export default function OrderConfirmationEmail({
           </Text>
 
           <Text style={styles.text}>
-            We’ve received your order <strong>#{orderId}</strong> and are
-            getting it ready for fulfillment.
-          </Text>
+            {getOrderStatusIntro(shippingMethod, orderId)}
+        </Text>
+
 
           <Hr style={styles.hr} />
 
@@ -129,7 +163,7 @@ export default function OrderConfirmationEmail({
 
           {/* Shipping Method */}
           <Text style={styles.text}>
-            <strong>Shipping Method:</strong> {shippingMethod}
+            <strong>Fulfillment Method:</strong> {shippingMethod}
           </Text>
 
           {/* Receipt Link */}
@@ -144,10 +178,9 @@ export default function OrderConfirmationEmail({
           <Hr style={styles.hr} />
 
           <Text style={styles.footer}>
-            We’ll notify you once your order ships.  
-            <br />
-            Thank you for supporting SR Botanicals 💚
+            {getFulfillmentMessage(shippingMethod)}
           </Text>
+
         </Container>
       </Body>
     </Html>

@@ -253,7 +253,9 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
     console.log('📦 All Available Rates:', rates);
 
     const subtotal = selectedProducts.reduce((sum, p) => sum + p.price * p.quantity, 0);
-    const tax = subtotal * 0.0825;
+    const TAX_RATE = 0; // set to 0.0825 later
+    const tax = subtotal * TAX_RATE;
+                                                          
     const shippingCost =
         formData.shippingType === 'paid'
         ? Number(rates.find(r => r.id === formData.shippingRateId)?.amount || 0)
@@ -634,7 +636,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             </div>
             <div className="flex justify-between">
             <span>Sales Tax (8.25%):</span>
-            <span>${(subtotal * 0.0825).toFixed(2)}</span>
+            <span>${(subtotal * TAX_RATE).toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
             <span>Shipping:</span>
@@ -643,7 +645,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             <hr className="my-2" />
             <div className="flex justify-between font-semibold">
             <span>Total:</span>
-            <span>${(subtotal + subtotal * 0.0825 + shippingCost).toFixed(2)}</span>
+            <span>${(subtotal + subtotal * TAX_RATE + shippingCost).toFixed(2)}</span>
             </div>
         </div>
         )}
