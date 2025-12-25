@@ -259,6 +259,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       customer_email: shippingInfo.email ?? null,
       first_name: shippingInfo.firstName,
       last_name: shippingInfo.lastName,
+      phone: shippingInfo.phone ?? null,
 
       products: cart.map((item: any) => ({
         name: item.name,
