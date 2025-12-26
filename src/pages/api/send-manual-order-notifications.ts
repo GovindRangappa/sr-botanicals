@@ -34,8 +34,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Only send notifications if order is paid
-    if (order.status !== 'paid') {
+    // Cash payments are always paid, so we check both status and payment method
+    const isCashPayment = order.payment_method === 'cash';
+    if (order.status !== 'paid' && !isCashPayment) {
       return res.status(400).json({ error: 'Order is not paid' });
+    }
+    
+    // If it's a cash payment but status is not 'paid', update it
+    if (isCashPayment && order.status !== 'paid') {
+      await supabase
+        .from('orders')
+        .update({ status: 'paid' })
+        .eq('id', orderId);
+      order.status = 'paid'; // Update local object for consistency
     }
 
     const results = {

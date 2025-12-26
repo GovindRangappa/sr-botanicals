@@ -329,6 +329,10 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
     console.log('📤 Submitting Order with shipping_method:', selectedRate ? `${selectedRate.provider} ${selectedRate.servicelevel?.name}` : formData.shippingMethod);
     console.log('📦 Selected Rate object:', selectedRate);
 
+    // Cash payments are always paid immediately
+    const isCashPayment = formData.paymentMethod === 'cash';
+    const orderStatus = (formData.paid || isCashPayment) ? 'paid' : 'unpaid';
+
     const { data, error } = await supabase
         .from('orders')
         .insert([
@@ -347,7 +351,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             shipping_city: formData.city,
             shipping_state: formData.state,
             shipping_zip: formData.zip,
-            status: formData.paid ? 'paid' : 'unpaid',
+            status: orderStatus,
             fulfillment_status: formData.fulfilled ? 'fulfilled' : 'unfulfilled',
             payment_method: formData.paymentMethod,
         },
@@ -451,10 +455,10 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
         }
     }
 
-    // 📧 Send notifications if order is paid (cash payment or marked as paid)
-    // For cash payments, invoice is marked as paid immediately
-    // For card payments, if admin checked "Paid", order is already marked as paid
-    if (formData.paid || formData.paymentMethod === 'cash') {
+    // 📧 Send notifications if order is paid
+    // Cash payments are always paid immediately, so always send notifications
+    // Card payments send notifications if admin checked "Paid"
+    if (orderStatus === 'paid') {
         try {
             const notificationRes = await fetch('/api/send-manual-order-notifications', {
                 method: 'POST',
