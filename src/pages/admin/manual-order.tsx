@@ -50,22 +50,20 @@ export default function ManualOrderEntry() {
     0
   );
   const tax = +(subtotal * 0.0825).toFixed(2);
-  const shippingCost = ['Local Pickup', 'Hand Delivery'].includes(shipping.method)
+  const shippingCost = ['local_pickup', 'hand_delivery'].includes(shipping.method)
     ? 0
     : 5; // or dynamically set if needed
 
   const total = +(subtotal + tax + shippingCost).toFixed(2);
 
   useEffect(() => {
-    // Only initialize if address fields should be shown
-    if (shipping.method !== "Paid Shipping" && shipping.method !== "Hand Delivery") {
-      return;
-    }
+    if (shipping.method !== "paid_shipping") return;
+    if (!autocompleteRef.current) return;
 
     function initAutocomplete() {
-      if (!window.google?.maps?.places || !autocompleteRef.current) return;
+      if (!window.google?.maps?.places) return;
 
-      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
+      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current!, {
         types: ['address'],
         componentRestrictions: { country: 'us' },
       });
@@ -74,47 +72,35 @@ export default function ManualOrderEntry() {
         const place = autocomplete.getPlace();
         if (!place.address_components) return;
 
-        const addressComponents: any = {
-          street: '',
-          city: '',
-          state: '',
-          zip: '',
-        };
-
-        place.address_components.forEach(component => {
-          const types = component.types;
-          if (types.includes('street_number')) addressComponents.street = component.long_name;
-          if (types.includes('route')) addressComponents.street += ` ${component.long_name}`;
-          if (types.includes('locality')) addressComponents.city = component.long_name;
-          if (types.includes('administrative_area_level_1')) addressComponents.state = component.short_name;
-          if (types.includes('postal_code')) addressComponents.zip = component.long_name;
+        const address: any = { street: "", city: "", state: "", zip: "" };
+        place.address_components.forEach(c => {
+          const types = c.types;
+          if (types.includes('street_number')) address.street = c.long_name;
+          if (types.includes('route')) address.street += ` ${c.long_name}`;
+          if (types.includes('locality')) address.city = c.long_name;
+          if (types.includes('administrative_area_level_1')) address.state = c.short_name;
+          if (types.includes('postal_code')) address.zip = c.long_name;
         });
 
         setShipping(prev => ({
           ...prev,
-          street: addressComponents.street.trim(),
-          city: addressComponents.city,
-          state: addressComponents.state,
-          zip: addressComponents.zip,
+          street: address.street.trim(),
+          city: address.city,
+          state: address.state,
+          zip: address.zip,
         }));
 
         if (autocompleteRef.current) {
-          autocompleteRef.current.value = `${addressComponents.street.trim()}, ${addressComponents.city}, ${addressComponents.state}, ${addressComponents.zip}`;
+          autocompleteRef.current.value = `${address.street.trim()}, ${address.city}, ${address.state} ${address.zip}`;
         }
       });
     }
 
-    // Check if Google Maps is already loaded
     if (window.google?.maps?.places) {
       initAutocomplete();
     } else {
-      // Wait for Google Maps script to load
       window.addEventListener('googleMapsLoaded', initAutocomplete);
-
-      // Cleanup
-      return () => {
-        window.removeEventListener('googleMapsLoaded', initAutocomplete);
-      };
+      return () => window.removeEventListener('googleMapsLoaded', initAutocomplete);
     }
   }, [shipping.method]);
 
@@ -124,13 +110,21 @@ export default function ManualOrderEntry() {
       return;
     }
 
+    // Map normalized shipping method values to display values for database
+    const shippingMethodMap: Record<string, string> = {
+      'paid_shipping': 'Paid Shipping',
+      'local_pickup': 'Local Pickup',
+      'hand_delivery': 'Hand Delivery',
+    };
+    const shippingMethodDisplay = shippingMethodMap[shipping.method] || shipping.method;
+
     const { error } = await supabase.from('orders').insert([
       {
         stripe_checkout_id: null,
         status: paymentMethod === 'card' ? 'pending' : 'complete',
         customer_email: customer.email,
         products,
-        shipping_method: shipping.method,
+        shipping_method: shippingMethodDisplay,
         shipping_name: shipping.name,
         shipping_street1: shipping.street,
         shipping_city: shipping.city,
@@ -195,18 +189,20 @@ export default function ManualOrderEntry() {
         <h2 className="text-xl font-semibold mb-2">Shipping</h2>
         <select value={shipping.method} onChange={e => setShipping({ ...shipping, method: e.target.value })} className="w-full p-2 mb-2 border rounded">
           <option value="">Select Shipping Method</option>
-          <option value="Local Pickup">Local Pickup</option>
-          <option value="Hand Delivery">Hand Delivery</option>
-          <option value="Paid Shipping">Paid Shipping</option>
+          <option value="paid_shipping">Paid Shipping</option>
+          <option value="local_pickup">Local Pickup</option>
+          <option value="hand_delivery">Hand Delivery</option>
         </select>
-        {(shipping.method === "Paid Shipping" || shipping.method === "Hand Delivery") && (
+        {(shipping.method === "paid_shipping" || shipping.method === "hand_delivery") && (
           <>
             <input placeholder="Recipient Name" value={shipping.name} onChange={e => setShipping({ ...shipping, name: e.target.value })} className="w-full p-2 mb-2 border rounded" />
-            <input 
-              ref={autocompleteRef}
-              placeholder="Start typing address..."
-              className="w-full p-2 mb-2 border rounded"
-            />
+            {shipping.method === "paid_shipping" && (
+              <input 
+                ref={autocompleteRef}
+                placeholder="Start typing address..."
+                className="w-full p-2 mb-2 border rounded"
+              />
+            )}
             <input placeholder="Street" value={shipping.street} onChange={e => setShipping({ ...shipping, street: e.target.value })} className="w-full p-2 mb-2 border rounded" readOnly />
             <input placeholder="City" value={shipping.city} onChange={e => setShipping({ ...shipping, city: e.target.value })} className="w-full p-2 mb-2 border rounded" readOnly />
             <input placeholder="State" value={shipping.state} onChange={e => setShipping({ ...shipping, state: e.target.value })} className="w-full p-2 mb-2 border rounded" readOnly />
