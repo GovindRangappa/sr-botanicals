@@ -341,7 +341,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
       if (shippingTypeLower === 'local pickup') {
         normalizedShippingMethod = 'Local Pickup';
       } else if (shippingTypeLower === 'hand delivery') {
-        normalizedShippingMethod = 'Hand Delivery (In Person)';
+        normalizedShippingMethod = 'Hand Delivery';
       } else {
         normalizedShippingMethod = formData.shippingMethod || formData.shippingType || 'Standard';
       }
@@ -649,7 +649,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             <option value="">Select Shipping Type</option>
             <option value="paid">Paid Shipping</option>
             <option value="local pickup">Local Pickup</option>
-            <option value="hand delivery">Hand Delivery (In Person)</option>
+            <option value="hand delivery">Hand Delivery</option>
           </select>
         </div>
 

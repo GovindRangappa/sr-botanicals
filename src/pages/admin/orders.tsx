@@ -227,7 +227,7 @@ export default function AdminOrdersPage() {
                               </div>
                             </td>
 
-                            {!["Local Pickup", "Hand Delivery (In Person)"].includes(order.shipping_method) ? (
+                            {!["Local Pickup", "Hand Delivery"].includes(order.shipping_method) ? (
                               <>
                                 <td rowSpan={productList.length} className="px-1 sm:px-2 py-2 sm:py-4 align-middle text-center text-xs">
                                   {order.tracking_number ? (

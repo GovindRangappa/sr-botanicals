@@ -109,7 +109,7 @@ export default function Success() {
 
   const isFreeDelivery =
     firstOrder.shipping_method === "Local Pickup" ||
-    firstOrder.shipping_method === "Hand Delivery (In Person)";
+    firstOrder.shipping_method === "Hand Delivery";
 
   return (
     <>
@@ -162,7 +162,7 @@ export default function Success() {
                 <strong>2412 Ivy Stone Ln, Friendswood, TX 77546</strong><br />
                 Thank you for your support!
               </>
-            ) : firstOrder.shipping_method === "Hand Delivery (In Person)" ? (
+            ) : firstOrder.shipping_method === "Hand Delivery" ? (
               <>
                 Hand Delivery (In Person by SR Botanicals)<br />
                 Your order will be personally handed to you.<br />

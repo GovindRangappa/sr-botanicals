@@ -20,11 +20,9 @@ function isLocalPickup(shippingMethod: string | null | undefined): boolean {
 function isHandDelivery(shippingMethod: string | null | undefined): boolean {
   if (!shippingMethod) return false;
   const normalized = shippingMethod.trim();
-  // Check for various possible formats
+  // Check for Hand Delivery (case-insensitive for safety)
   return normalized === "Hand Delivery" || 
-         normalized === "Hand Delivery (In Person)" ||
-         normalized.toLowerCase() === "hand delivery" ||
-         normalized.toLowerCase().includes("hand delivery");
+         normalized.toLowerCase() === "hand delivery";
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

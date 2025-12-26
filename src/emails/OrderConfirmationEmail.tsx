@@ -33,16 +33,21 @@ interface OrderConfirmationEmailProps {
 
 
 function getFulfillmentMessage(shippingMethod: string) {
-  switch (shippingMethod) {
-    case "Local Pickup":
-      return "We’ll reach out shortly to coordinate a pickup time.";
+  // Normalize shipping method for comparison
+  const normalized = shippingMethod?.trim() || "";
+  const isLocalPickup = normalized === "Local Pickup";
+  const isHandDelivery = normalized === "Hand Delivery";
 
-    case "Hand Delivery":
-      return "Your order has been fulfilled. Thank you for supporting SR Botanicals 💚";
-
-    default:
-      return "We’ll notify you once your order ships and provide tracking information.";
+  if (isLocalPickup) {
+    return "We'll reach out shortly to coordinate a pickup time.";
   }
+
+  if (isHandDelivery) {
+    return "Your order has been fulfilled. Thank you for supporting SR Botanicals 💚";
+  }
+
+  // Default for paid shipping
+  return "We'll notify you once your order ships and provide tracking information.";
 }
 
 
@@ -50,16 +55,21 @@ function getOrderStatusIntro(
   shippingMethod: string,
   orderId: string | number
 ) {
-  switch (shippingMethod) {
-    case "Local Pickup":
-      return `We’ve received your order #${orderId} and are preparing it for pickup.`;
+  // Normalize shipping method for comparison
+  const normalized = shippingMethod?.trim() || "";
+  const isLocalPickup = normalized === "Local Pickup";
+  const isHandDelivery = normalized === "Hand Delivery";
 
-    case "Hand Delivery":
-      return `Your order #${orderId} has been completed. Thank you for shopping with SR Botanicals.`;
-
-    default:
-      return `We’ve received your order #${orderId} and are getting it ready for shipment.`;
+  if (isLocalPickup) {
+    return `We've received your order #${orderId} and are preparing it for pickup.`;
   }
+
+  if (isHandDelivery) {
+    return `Your order #${orderId} has been completed. Thank you for shopping with SR Botanicals.`;
+  }
+
+  // Default for paid shipping
+  return `We've received your order #${orderId} and are getting it ready for shipment.`;
 }
 
 

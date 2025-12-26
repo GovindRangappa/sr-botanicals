@@ -171,7 +171,7 @@ export default function CheckoutPage() {
           shippingMethod: isFreeDelivery
             ? selectedRate === 'local-pickup'
               ? 'Local Pickup'
-              : 'Hand Delivery (In Person)'
+              : 'Hand Delivery'
             : null,
           shipmentId: isFreeDelivery ? null : shipmentId,
         }),
