@@ -325,9 +325,26 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
 
     const selectedRate = rates.find(r => r.id === formData.shippingRateId);
 
+    // Normalize shipping method to match expected database format
+    let normalizedShippingMethod: string;
+    if (selectedRate) {
+      // For paid shipping, use the rate provider and servicelevel
+      normalizedShippingMethod = `${selectedRate.provider} ${selectedRate.servicelevel?.name || selectedRate.servicelevel}`;
+    } else {
+      // For free delivery options, normalize the shipping type
+      const shippingTypeLower = formData.shippingType.toLowerCase().trim();
+      if (shippingTypeLower === 'local pickup') {
+        normalizedShippingMethod = 'Local Pickup';
+      } else if (shippingTypeLower === 'hand delivery') {
+        normalizedShippingMethod = 'Hand Delivery (In Person)';
+      } else {
+        normalizedShippingMethod = formData.shippingMethod || formData.shippingType || 'Standard';
+      }
+    }
 
-    console.log('📤 Submitting Order with shipping_method:', selectedRate ? `${selectedRate.provider} ${selectedRate.servicelevel?.name}` : formData.shippingMethod);
+    console.log('📤 Submitting Order with shipping_method:', normalizedShippingMethod);
     console.log('📦 Selected Rate object:', selectedRate);
+    console.log('📦 Shipping Type from form:', formData.shippingType);
 
     // Cash payments are always paid immediately
     const isCashPayment = formData.paymentMethod === 'cash';
@@ -345,7 +362,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             tax,
             shipping_cost: shippingCost,
             shipment_id: formData.shipmentId ?? null, // ✅ added
-            shipping_method: selectedRate ? `${selectedRate.provider} ${selectedRate.servicelevel}` : formData.shippingMethod,
+            shipping_method: normalizedShippingMethod,
             shipping_name: `${formData.firstName} ${formData.lastName}`,
             shipping_street1: formData.street,
             shipping_city: formData.city,

@@ -9,6 +9,18 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Helper function to check if shipping method is Local Pickup
+function isLocalPickup(shippingMethod: string | null | undefined): boolean {
+  if (!shippingMethod) return false;
+  return shippingMethod === "Local Pickup";
+}
+
+// Helper function to check if shipping method is Hand Delivery
+function isHandDelivery(shippingMethod: string | null | undefined): boolean {
+  if (!shippingMethod) return false;
+  return shippingMethod === "Hand Delivery" || shippingMethod === "Hand Delivery (In Person)";
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -74,7 +86,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // ✅ Owner notification for Local Pickup (send only once)
     if (
-      order.shipping_method === "Local Pickup" &&
+      isLocalPickup(order.shipping_method) &&
       !order.owner_pickup_email_sent
     ) {
       try {
@@ -88,14 +100,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch (err) {
         console.error("❌ Failed to send owner pickup notification (manual order):", err);
       }
-    } else if (order.shipping_method === "Local Pickup") {
+    } else if (isLocalPickup(order.shipping_method)) {
       console.log("ℹ️ Owner pickup notification already sent");
     }
 
     // ✅ Owner notification for Paid Shipping (send only once)
     if (
-      order.shipping_method !== "Local Pickup" &&
-      order.shipping_method !== "Hand Delivery" &&
+      !isLocalPickup(order.shipping_method) &&
+      !isHandDelivery(order.shipping_method) &&
       !order.owner_shipping_email_sent
     ) {
       try {
