@@ -9,6 +9,27 @@ import {
   Link,
 } from "@react-email/components";
 
+function getTrackingUrl(carrier: string, trackingNumber: string) {
+  const normalized = carrier.toLowerCase();
+  
+  if (normalized.includes("usps")) {
+    return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNumber}`;
+  }
+  
+  if (normalized.includes("ups")) {
+    return `https://www.ups.com/track?loc=en_US&tracknum=${trackingNumber}`;
+  }
+  
+  if (normalized.includes("fedex")) {
+    return `https://www.fedex.com/fedextrack/?trknbr=${trackingNumber}`;
+  }
+  
+  // Fallback: Google it
+  return `https://www.google.com/search?q=${encodeURIComponent(
+    carrier + " tracking " + trackingNumber
+  )}`;
+}
+
 type Props = {
   firstName?: string;
   orderId: string | number;
@@ -22,7 +43,6 @@ export default function ShipmentConfirmationEmail({
   orderId,
   carrier,
   trackingNumber,
-  trackingUrl,
 }: Props) {
   return (
     <Html>
@@ -49,18 +69,20 @@ export default function ShipmentConfirmationEmail({
             <strong>Tracking Number:</strong> {trackingNumber}
           </Text>
 
-          {trackingUrl && (
-            <Text style={styles.text}>
-              <Link href={trackingUrl} target="_blank" style={styles.link}>
-                Track your package
-              </Link>
-            </Text>
-          )}
+          <Text style={styles.text}>
+            <Link
+              href={getTrackingUrl(carrier, trackingNumber)}
+              target="_blank"
+              style={styles.link}
+            >
+              Track your shipment
+            </Link>
+          </Text>
 
           <Hr style={styles.hr} />
 
           <Text style={styles.footer}>
-            Tracking updates are provided directly by the carrier.
+            Tracking updates are provided directly by the carrier using the link above.
             <br />
             Thank you for supporting SR Botanicals 💚
           </Text>
