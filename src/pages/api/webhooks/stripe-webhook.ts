@@ -165,6 +165,87 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     console.error("❌ Failed to send owner shipping notification:", err);
                   }
                 }
+
+                // 📦 Create shipping label for paid shipping orders
+                console.log("📦 Checking if order is eligible for Shippo label (payment_intent.succeeded):");
+                console.log(" - shipment_id:", orderToLabel?.shipment_id);
+                console.log(" - shipping_method:", orderToLabel?.shipping_method);
+
+                if (
+                  orderToLabel?.shipment_id &&
+                  orderToLabel.shipping_method !== 'Local Pickup' &&
+                  orderToLabel.shipping_method !== 'Hand Delivery'
+                ) {
+                  try {
+                    const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
+
+                    const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${orderToLabel.shipment_id}`, {
+                      headers: {
+                        Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
+                        'Content-Type': 'application/json',
+                      },
+                    });
+
+                    const shipment = await shipmentRes.json();
+
+                    const rate = shipment.rates.find((r: any) =>
+                      `${r.provider} ${r.servicelevel.name}` === orderToLabel.shipping_method
+                    );
+
+                    if (!rate) {
+                      console.error("❌ Rate matching manual invoice order not found (payment_intent.succeeded)");
+                    } else {
+                      const transaction = await shippo.transactions.create({
+                        rate: rate.object_id,
+                        labelFileType: "PDF",
+                        async: false,
+                      });
+
+                      if (transaction.status === "SUCCESS") {
+                        const { trackingNumber, labelUrl } = transaction;
+
+                        const { error: labelUpdateError } = await supabase
+                          .from('orders')
+                          .update({
+                            tracking_number: trackingNumber,
+                            label_url: labelUrl,
+                          })
+                          .eq('id', orderId);
+
+                        if (labelUpdateError) {
+                          console.error("❗ Failed to update manual invoice order with label (payment_intent.succeeded):", labelUpdateError);
+                        } else {
+                          console.log("✅ Shipping label created & saved for manual invoice order (payment_intent.succeeded)");
+                        }
+
+                        // Send customer shipment email (once)
+                        if (!orderToLabel?.shipment_email_sent) {
+                          try {
+                            await sendShipmentConfirmationEmail({
+                              ...orderToLabel,
+                              tracking_number: trackingNumber,
+                            });
+
+                            await supabase
+                              .from("orders")
+                              .update({ shipment_email_sent: true })
+                              .eq("id", orderId);
+
+                            console.log("✓ Shipment confirmation email sent (payment_intent.succeeded)");
+                          } catch (err) {
+                            console.error("❌ Failed to send shipment email (payment_intent.succeeded):", err);
+                          }
+                        } else {
+                          console.log("ℹ️ Shipment confirmation email already sent");
+                        }
+                      } else {
+                        console.error("❌ Shippo label creation failed (payment_intent.succeeded):", transaction.messages);
+                      }
+                    }
+                  } catch (err) {
+                    console.error("🚨 Error during label creation (payment_intent.succeeded):", err);
+                  }
+                }
               }
             }
           } else {
