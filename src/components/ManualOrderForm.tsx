@@ -10,6 +10,8 @@ const supabase = createClient(
 );
 
 export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
+  console.log('📄 ManualOrderForm component rendered');
+  
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
@@ -100,73 +102,87 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
   }, []);
 
   useEffect(() => {
-    if (!autocompleteRef.current) return;
+    // Only initialize if paid shipping is selected
+    if (shippingType !== 'paid') return;
 
-    // Wait for Google Maps to load
-    const initAutocomplete = () => {
-      if (!window.google?.maps?.places || !autocompleteRef.current) return;
+    function initAutocomplete() {
+      console.log('🔍 ManualOrderForm initAutocomplete called', {
+        hasGoogleMaps: !!window.google?.maps?.places,
+        hasRef: !!autocompleteRef.current,
+        shippingType: shippingType
+      });
 
+      if (!window.google?.maps?.places || !autocompleteRef.current) {
+        console.log('❌ Cannot initialize - missing requirements');
+        return;
+      }
+
+      console.log('✅ Initializing Google Places Autocomplete in ManualOrderForm');
       const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
         types: ['address'],
         componentRestrictions: { country: 'us' },
       });
 
+      console.log('✅ Autocomplete instance created in ManualOrderForm');
+
       autocomplete.addListener('place_changed', () => {
+        console.log('📍 Place selected from autocomplete in ManualOrderForm');
         const place = autocomplete.getPlace();
         if (!place.address_components) return;
 
-        const address: any = { street: '', city: '', state: '', zip: '' };
+        const addressComponents: any = {
+          street: '',
+          city: '',
+          state: '',
+          zip: '',
+        };
+
         place.address_components.forEach(component => {
           const types = component.types;
-          if (types.includes('street_number')) address.street = component.long_name;
-          if (types.includes('route')) address.street += ` ${component.long_name}`;
-          if (types.includes('locality')) address.city = component.long_name;
-          if (types.includes('administrative_area_level_1')) address.state = component.short_name;
-          if (types.includes('postal_code')) address.zip = component.long_name;
+          if (types.includes('street_number')) addressComponents.street = component.long_name;
+          if (types.includes('route')) addressComponents.street += ` ${component.long_name}`;
+          if (types.includes('locality')) addressComponents.city = component.long_name;
+          if (types.includes('administrative_area_level_1')) addressComponents.state = component.short_name;
+          if (types.includes('postal_code')) addressComponents.zip = component.long_name;
         });
 
         setFormData(prev => ({
           ...prev,
-          street: address.street.trim(),
-          city: address.city,
-          state: address.state,
-          zip: address.zip,
+          street: addressComponents.street.trim(),
+          city: addressComponents.city,
+          state: addressComponents.state,
+          zip: addressComponents.zip,
         }));
 
         if (autocompleteRef.current) {
-          autocompleteRef.current.value = `${address.street.trim()}, ${address.city}, ${address.state}, ${address.zip}`;
+          autocompleteRef.current.value = `${addressComponents.street.trim()}, ${addressComponents.city}, ${addressComponents.state}, ${addressComponents.zip}`;
         }
       });
-    };
-
-    // Check if already loaded
-    if (window.google?.maps?.places) {
-      initAutocomplete();
-    } else {
-      // Wait for the load event
-      const handleLoad = () => {
-        initAutocomplete();
-      };
-      
-      if ((window as any).googleMapsLoaded) {
-        initAutocomplete();
-      } else {
-        window.addEventListener('googlemapsloaded', handleLoad);
-        // Fallback: check periodically
-        const checkInterval = setInterval(() => {
-          if (window.google?.maps?.places) {
-            clearInterval(checkInterval);
-            initAutocomplete();
-          }
-        }, 100);
-
-        // Cleanup
-        return () => {
-          window.removeEventListener('googlemapsloaded', handleLoad);
-          clearInterval(checkInterval);
-        };
-      }
     }
+
+    console.log('🚀 ManualOrderForm useEffect running for shippingType:', shippingType);
+
+    // Wait for Google Maps script to load (using correct event name)
+    window.addEventListener('googleMapsLoaded', initAutocomplete);
+
+    // Also check if already loaded
+    if (window.google?.maps?.places && autocompleteRef.current) {
+      console.log('⏱️ Google Maps already loaded, initializing with delay...');
+      // Small delay to ensure DOM is ready after conditional render
+      const timeoutId = setTimeout(initAutocomplete, 100);
+      return () => clearTimeout(timeoutId);
+    } else {
+      console.log('⏳ Waiting for Google Maps to load...', {
+        hasGoogleMaps: !!window.google?.maps?.places,
+        hasRef: !!autocompleteRef.current
+      });
+    }
+
+    // Cleanup
+    return () => {
+      console.log('🧹 Cleaning up autocomplete effect in ManualOrderForm');
+      window.removeEventListener('googleMapsLoaded', initAutocomplete);
+    };
   }, [shippingType]);
 
   const filteredProducts = allProducts.filter(p =>
