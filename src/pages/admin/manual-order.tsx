@@ -58,15 +58,31 @@ export default function ManualOrderEntry() {
 
   useEffect(() => {
     function initAutocomplete() {
-      if (!window.google?.maps?.places || !autocompleteRef.current) return;
-      if (shipping.method !== "paid_shipping") return;
+      console.log('🔍 initAutocomplete called', {
+        hasGoogleMaps: !!window.google?.maps?.places,
+        hasRef: !!autocompleteRef.current,
+        shippingMethod: shipping.method
+      });
 
+      if (!window.google?.maps?.places || !autocompleteRef.current) {
+        console.log('❌ Cannot initialize - missing requirements');
+        return;
+      }
+      if (shipping.method !== "paid_shipping") {
+        console.log('❌ Cannot initialize - wrong shipping method');
+        return;
+      }
+
+      console.log('✅ Initializing Google Places Autocomplete');
       const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
         types: ['address'],
         componentRestrictions: { country: 'us' },
       });
 
+      console.log('✅ Autocomplete instance created');
+
       autocomplete.addListener('place_changed', () => {
+        console.log('📍 Place selected from autocomplete');
         const place = autocomplete.getPlace();
         if (!place.address_components) return;
 
@@ -101,20 +117,35 @@ export default function ManualOrderEntry() {
     }
 
     // Only initialize if paid_shipping is selected
-    if (shipping.method !== "paid_shipping") return;
+    if (shipping.method !== "paid_shipping") {
+      console.log('⏭️ Skipping autocomplete init - shipping method:', shipping.method);
+      return;
+    }
+
+    console.log('🚀 useEffect running for paid_shipping, checking initialization...');
 
     // Wait for Google Maps script to load
-    window.addEventListener('googleMapsLoaded', initAutocomplete);
+    window.addEventListener('googleMapsLoaded', () => {
+      console.log('📦 googleMapsLoaded event fired');
+      initAutocomplete();
+    });
 
     // Also check if already loaded
     if (window.google?.maps?.places && autocompleteRef.current) {
+      console.log('⏱️ Google Maps already loaded, initializing with delay...');
       // Small delay to ensure DOM is ready after conditional render
       const timeoutId = setTimeout(initAutocomplete, 100);
       return () => clearTimeout(timeoutId);
+    } else {
+      console.log('⏳ Waiting for Google Maps to load...', {
+        hasGoogleMaps: !!window.google?.maps?.places,
+        hasRef: !!autocompleteRef.current
+      });
     }
 
     // Cleanup
     return () => {
+      console.log('🧹 Cleaning up autocomplete effect');
       window.removeEventListener('googleMapsLoaded', initAutocomplete);
     };
   }, [shipping.method]);
