@@ -44,6 +44,140 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       id: event.id,
     });
 
+    // Handle payment_intent.succeeded for invoice payments
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      
+      console.log('💳 Payment intent succeeded:', {
+        payment_intent_id: paymentIntent.id,
+        customer: paymentIntent.customer,
+        metadata: paymentIntent.metadata,
+      });
+
+      try {
+        // Retrieve the payment intent with invoice expansion to check if it's for an invoice
+        const expandedPaymentIntent = await stripe.paymentIntents.retrieve(paymentIntent.id, {
+          expand: ['invoice'],
+        });
+        
+        const expandedPaymentIntentAny = expandedPaymentIntent as any;
+        const invoiceRef = expandedPaymentIntentAny.invoice;
+        
+        if (invoiceRef) {
+          const invoiceId = typeof invoiceRef === 'string' ? invoiceRef : invoiceRef.id;
+          console.log('📋 Payment intent is for invoice:', invoiceId);
+          
+          // Retrieve the invoice to get the order_id from metadata
+          const invoice = await stripe.invoices.retrieve(invoiceId);
+          const orderId = invoice.metadata?.order_id;
+          
+          console.log('📋 Invoice retrieved:', {
+            invoice_id: invoice.id,
+            order_id_from_metadata: orderId,
+            status: invoice.status,
+          });
+
+          if (orderId) {
+            // Process the invoice payment - check if order exists and update
+            const { data: existingOrder, error: fetchError } = await supabase
+              .from('orders')
+              .select('id, status, shipping_method')
+              .eq('id', orderId)
+              .single();
+
+            if (fetchError || !existingOrder) {
+              console.error('❌ Order not found in database:', {
+                orderId,
+                error: fetchError,
+              });
+            } else {
+              console.log('📦 Found order:', {
+                id: existingOrder.id,
+                current_status: existingOrder.status,
+                shipping_method: existingOrder.shipping_method,
+              });
+
+              const { error: updateError, data: updatedOrder } = await supabase
+                .from('orders')
+                .update({
+                  status: 'paid',
+                  stripe_invoice_id: invoice.id,
+                })
+                .eq('id', orderId)
+                .select()
+                .single();
+
+              if (updateError) {
+                console.error('❌ Failed to update invoice-paid order:', updateError);
+              } else {
+                console.log(`✅ Order ${orderId} marked as paid via payment_intent.succeeded`);
+                console.log('📊 Updated order:', updatedOrder);
+
+                // Fetch full order for notifications
+                const { data: orderToLabel } = await supabase
+                  .from('orders')
+                  .select('*')
+                  .eq('id', orderId)
+                  .single();
+
+                // Send notifications (same as invoice.paid handler)
+                if (orderToLabel && !orderToLabel.confirmation_email_sent) {
+                  try {
+                    await sendOrderConfirmationEmail(orderToLabel);
+                    await supabase
+                      .from("orders")
+                      .update({ confirmation_email_sent: true })
+                      .eq("id", orderId);
+                    console.log("✅ Order confirmation email sent (payment_intent.succeeded)");
+                  } catch (err) {
+                    console.error("❌ Failed to send confirmation email:", err);
+                  }
+                }
+
+                // Owner notifications
+                if (orderToLabel?.shipping_method === "Local Pickup" && !orderToLabel.owner_pickup_email_sent) {
+                  try {
+                    await sendOwnerPickupNotificationEmail(orderToLabel);
+                    await supabase
+                      .from("orders")
+                      .update({ owner_pickup_email_sent: true })
+                      .eq("id", orderId);
+                    console.log("☑ Owner Local Pickup notification sent (payment_intent.succeeded)");
+                  } catch (err) {
+                    console.error("❌ Failed to send owner pickup notification:", err);
+                  }
+                }
+
+                if (
+                  orderToLabel &&
+                  orderToLabel.shipping_method !== "Local Pickup" &&
+                  orderToLabel.shipping_method !== "Hand Delivery" &&
+                  !orderToLabel.owner_shipping_email_sent
+                ) {
+                  try {
+                    await sendOwnerShippingNotificationEmail(orderToLabel);
+                    await supabase
+                      .from("orders")
+                      .update({ owner_shipping_email_sent: true })
+                      .eq("id", orderId);
+                    console.log("✔ Owner shipping notification sent (payment_intent.succeeded)");
+                  } catch (err) {
+                    console.error("❌ Failed to send owner shipping notification:", err);
+                  }
+                }
+              }
+            }
+          } else {
+            console.warn('⚠️ Invoice has no order_id in metadata');
+          }
+        } else {
+          console.log('ℹ️ Payment intent is not for an invoice, skipping');
+        }
+      } catch (err) {
+        console.error('❌ Failed to retrieve invoice from payment intent:', err);
+      }
+    }
+
     // Handle invoice payment events
     if (event.type === 'invoice.paid' || event.type === 'invoice.payment_succeeded') {
       console.log(`📃 Processing invoice payment event: ${event.type}`);
