@@ -318,167 +318,198 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const orderId = invoice.metadata?.order_id;
       const stripeInvoiceId = invoice.id;
 
-      if (orderId) {
-        const { error } = await supabase
-          .from('orders')
-          .update({
-            status: 'paid',
-            stripe_invoice_id: stripeInvoiceId,
-          })
-          .eq('id', orderId);
+      console.log('📋 Invoice details:', {
+        invoice_id: stripeInvoiceId,
+        order_id_from_metadata: orderId,
+        metadata: invoice.metadata,
+        customer: invoice.customer,
+        amount_paid: invoice.amount_paid,
+      });
 
-        if (error) {
-          console.error('❌ Failed to update invoice-paid order:', error);
-        } else {
-          console.log(`✅ Order ${orderId} marked as paid via invoice`);
+      if (!orderId) {
+        console.warn('⚠️ invoice.paid event missing order_id metadata');
+        console.warn('⚠️ Invoice metadata:', JSON.stringify(invoice.metadata, null, 2));
+        return res.status(200).end(); // Return 200 to acknowledge receipt
+      }
 
-          const { data: orderToLabel } = await supabase
+      // Check if order exists first
+      const { data: existingOrder, error: fetchError } = await supabase
+        .from('orders')
+        .select('id, status, shipping_method')
+        .eq('id', orderId)
+        .single();
+
+      if (fetchError || !existingOrder) {
+        console.error('❌ Order not found in database:', {
+          orderId,
+          error: fetchError,
+        });
+        return res.status(200).end(); // Return 200 to acknowledge receipt
+      }
+
+      console.log('📦 Found order:', {
+        id: existingOrder.id,
+        current_status: existingOrder.status,
+        shipping_method: existingOrder.shipping_method,
+      });
+
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          status: 'paid',
+          stripe_invoice_id: stripeInvoiceId,
+        })
+        .eq('id', orderId);
+
+      if (error) {
+        console.error('❌ Failed to update invoice-paid order:', error);
+        return res.status(200).end(); // Return 200 to acknowledge receipt
+      }
+
+      console.log(`✅ Order ${orderId} marked as paid via invoice`);
+
+      const { data: orderToLabel } = await supabase
             .from('orders')
             .select('*')
             .eq('id', orderId)
             .single();
 
-          // 📸 Send order confirmation email (only once)
-          if (
-            orderToLabel &&
-            !orderToLabel.confirmation_email_sent
-          ) {
-            try {
-              await sendOrderConfirmationEmail(orderToLabel);
+      // 📸 Send order confirmation email (only once)
+      if (
+        orderToLabel &&
+        !orderToLabel.confirmation_email_sent
+      ) {
+        try {
+          await sendOrderConfirmationEmail(orderToLabel);
 
-              await supabase
-                .from("orders")
-                .update({ confirmation_email_sent: true })
-                .eq("id", orderId);
+          await supabase
+            .from("orders")
+            .update({ confirmation_email_sent: true })
+            .eq("id", orderId);
 
-              console.log("✅ Order confirmation email sent (invoice.paid)");
-            } catch (err) {
-              console.error("❌ Failed to send confirmation email (invoice.paid):", err);
-            }
-          }
+          console.log("✅ Order confirmation email sent (invoice.paid)");
+        } catch (err) {
+          console.error("❌ Failed to send confirmation email (invoice.paid):", err);
+        }
+      }
 
-          // ✅ Owner notification for Local Pickup (send only once)
-          if (
-            orderToLabel &&
-            orderToLabel.shipping_method === "Local Pickup" &&
-            !orderToLabel.owner_pickup_email_sent
-          ) {
-            try {
-              await sendOwnerPickupNotificationEmail(orderToLabel);
+      // ✅ Owner notification for Local Pickup (send only once)
+      if (
+        orderToLabel &&
+        orderToLabel.shipping_method === "Local Pickup" &&
+        !orderToLabel.owner_pickup_email_sent
+      ) {
+        try {
+          await sendOwnerPickupNotificationEmail(orderToLabel);
 
-              await supabase
-                .from("orders")
-                .update({ owner_pickup_email_sent: true })
-                .eq("id", orderId);
+          await supabase
+            .from("orders")
+            .update({ owner_pickup_email_sent: true })
+            .eq("id", orderId);
 
-              console.log("☑ Owner Local Pickup notification sent (invoice.paid)");
-            } catch (err) {
-              console.error("❌ Failed to send owner pickup notification (invoice.paid):", err);
-            }
-          }
+          console.log("☑ Owner Local Pickup notification sent (invoice.paid)");
+        } catch (err) {
+          console.error("❌ Failed to send owner pickup notification (invoice.paid):", err);
+        }
+      }
 
-          // ✅ Owner notification for Paid Shipping (send only once)
-          if (
-            orderToLabel &&
-            orderToLabel.shipping_method !== "Local Pickup" &&
-            orderToLabel.shipping_method !== "Hand Delivery" &&
-            !orderToLabel.owner_shipping_email_sent
-          ) {
-            try {
-              await sendOwnerShippingNotificationEmail(orderToLabel);
+      // ✅ Owner notification for Paid Shipping (send only once)
+      if (
+        orderToLabel &&
+        orderToLabel.shipping_method !== "Local Pickup" &&
+        orderToLabel.shipping_method !== "Hand Delivery" &&
+        !orderToLabel.owner_shipping_email_sent
+      ) {
+        try {
+          await sendOwnerShippingNotificationEmail(orderToLabel);
 
-              await supabase
-                .from("orders")
-                .update({ owner_shipping_email_sent: true })
-                .eq("id", orderId);
+          await supabase
+            .from("orders")
+            .update({ owner_shipping_email_sent: true })
+            .eq("id", orderId);
 
-              console.log("✔ Owner shipping notification sent (invoice.paid)");
-            } catch (err) {
-              console.error("❌ Failed to send owner shipping notification (invoice.paid):", err);
-            }
-          }
+          console.log("✔ Owner shipping notification sent (invoice.paid)");
+        } catch (err) {
+          console.error("❌ Failed to send owner shipping notification (invoice.paid):", err);
+        }
+      }
 
-          console.log("📦 Checking if order is eligible for Shippo label:");
-          console.log(" - shipment_id:", orderToLabel?.shipment_id);
-          console.log(" - shipping_method:", orderToLabel?.shipping_method);
+      console.log("📦 Checking if order is eligible for Shippo label:");
+      console.log(" - shipment_id:", orderToLabel?.shipment_id);
+      console.log(" - shipping_method:", orderToLabel?.shipping_method);
 
-          if (
-            orderToLabel?.shipment_id &&
-            orderToLabel.shipping_method !== 'Local Pickup' &&
-            orderToLabel.shipping_method !== 'Hand Delivery'
-          ) {
-            try {
-              const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
+      if (
+        orderToLabel?.shipment_id &&
+        orderToLabel.shipping_method !== 'Local Pickup' &&
+        orderToLabel.shipping_method !== 'Hand Delivery'
+      ) {
+        try {
+          const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
 
-              const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${orderToLabel.shipment_id}`, {
-                headers: {
-                  Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
-                  'Content-Type': 'application/json',
-                },
-              });
+          const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${orderToLabel.shipment_id}`, {
+            headers: {
+              Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+          });
 
-              const shipment = await shipmentRes.json();
+          const shipment = await shipmentRes.json();
 
-              const rate = shipment.rates.find((r: any) =>
-                `${r.provider} ${r.servicelevel.name}` === orderToLabel.shipping_method
-              );
+          const rate = shipment.rates.find((r: any) =>
+            `${r.provider} ${r.servicelevel.name}` === orderToLabel.shipping_method
+          );
 
-              if (!rate) {
-                console.error("❌ Rate matching manual invoice order not found");
+          if (!rate) {
+            console.error("❌ Rate matching manual invoice order not found");
+          } else {
+            const transaction = await shippo.transactions.create({
+              rate: rate.object_id,
+              labelFileType: "PDF",
+              async: false,
+            });
+
+            if (transaction.status === "SUCCESS") {
+              const { trackingNumber, labelUrl } = transaction;
+
+              const { error: labelUpdateError } = await supabase
+                .from('orders')
+                .update({
+                  tracking_number: trackingNumber,
+                  label_url: labelUrl,
+                })
+                .eq('id', orderId);
+
+              if (labelUpdateError) {
+                console.error("❗ Failed to update manual invoice order with label:", labelUpdateError);
               } else {
-                const transaction = await shippo.transactions.create({
-                  rate: rate.object_id,
-                  labelFileType: "PDF",
-                  async: false,
-                });
+                console.log("✅ Shipping label created & saved for manual invoice order");
+              }
 
-                if (transaction.status === "SUCCESS") {
-                  const { trackingNumber, labelUrl } = transaction;
+              // Send customer shipment email (once)
+              if (!orderToLabel?.shipment_email_sent) {
+                try {
+                  await sendShipmentConfirmationEmail({
+                    ...orderToLabel,
+                    tracking_number: trackingNumber,
+                  });
 
-                  const { error: labelUpdateError } = await supabase
-                    .from('orders')
-                    .update({
-                      tracking_number: trackingNumber,
-                      label_url: labelUrl,
-                    })
-                    .eq('id', orderId);
+                  await supabase
+                    .from("orders")
+                    .update({ shipment_email_sent: true })
+                    .eq("id", orderId);
 
-                  if (labelUpdateError) {
-                    console.error("❗ Failed to update manual invoice order with label:", labelUpdateError);
-                  } else {
-                    console.log("✅ Shipping label created & saved for manual invoice order");
-                  }
-
-                  // Send customer shipment email (once)
-                  if (!orderToLabel?.shipment_email_sent) {
-                    try {
-                      await sendShipmentConfirmationEmail({
-                        ...orderToLabel,
-                        tracking_number: trackingNumber,
-                      });
-
-                      await supabase
-                        .from("orders")
-                        .update({ shipment_email_sent: true })
-                        .eq("id", orderId);
-
-                      console.log("✓ Shipment confirmation email sent");
-                    } catch (err) {
-                      console.error("❌ Failed to send shipment email:", err);
-                    }
-                  }
-                } else {
-                  console.error("❌ Shippo label creation failed:", transaction.messages);
+                  console.log("✓ Shipment confirmation email sent");
+                } catch (err) {
+                  console.error("❌ Failed to send shipment email:", err);
                 }
               }
-            } catch (err) {
-              console.error("🚨 Error during label creation (invoice.paid):", err);
+            } else {
+              console.error("❌ Shippo label creation failed:", transaction.messages);
             }
           }
-
+        } catch (err) {
+          console.error("🚨 Error during label creation (invoice.paid):", err);
         }
-      } else {
-        console.warn('⚠️ invoice.paid event missing order_id metadata');
       }
     }
 
