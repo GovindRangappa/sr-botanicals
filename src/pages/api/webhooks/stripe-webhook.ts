@@ -338,7 +338,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             .eq('id', orderId)
             .single();
 
+          // 📸 Send order confirmation email (only once)
+          if (
+            orderToLabel &&
+            !orderToLabel.confirmation_email_sent
+          ) {
+            try {
+              await sendOrderConfirmationEmail(orderToLabel);
 
+              await supabase
+                .from("orders")
+                .update({ confirmation_email_sent: true })
+                .eq("id", orderId);
+
+              console.log("✅ Order confirmation email sent (invoice.paid)");
+            } catch (err) {
+              console.error("❌ Failed to send confirmation email (invoice.paid):", err);
+            }
+          }
+
+          // ✅ Owner notification for Local Pickup (send only once)
+          if (
+            orderToLabel &&
+            orderToLabel.shipping_method === "Local Pickup" &&
+            !orderToLabel.owner_pickup_email_sent
+          ) {
+            try {
+              await sendOwnerPickupNotificationEmail(orderToLabel);
+
+              await supabase
+                .from("orders")
+                .update({ owner_pickup_email_sent: true })
+                .eq("id", orderId);
+
+              console.log("☑ Owner Local Pickup notification sent (invoice.paid)");
+            } catch (err) {
+              console.error("❌ Failed to send owner pickup notification (invoice.paid):", err);
+            }
+          }
+
+          // ✅ Owner notification for Paid Shipping (send only once)
+          if (
+            orderToLabel &&
+            orderToLabel.shipping_method !== "Local Pickup" &&
+            orderToLabel.shipping_method !== "Hand Delivery" &&
+            !orderToLabel.owner_shipping_email_sent
+          ) {
+            try {
+              await sendOwnerShippingNotificationEmail(orderToLabel);
+
+              await supabase
+                .from("orders")
+                .update({ owner_shipping_email_sent: true })
+                .eq("id", orderId);
+
+              console.log("✔ Owner shipping notification sent (invoice.paid)");
+            } catch (err) {
+              console.error("❌ Failed to send owner shipping notification (invoice.paid):", err);
+            }
+          }
 
           console.log("📦 Checking if order is eligible for Shippo label:");
           console.log(" - shipment_id:", orderToLabel?.shipment_id);
