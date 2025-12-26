@@ -330,9 +330,14 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
     if (selectedRate) {
       // For paid shipping, use the rate provider and servicelevel
       normalizedShippingMethod = `${selectedRate.provider} ${selectedRate.servicelevel?.name || selectedRate.servicelevel}`;
+      console.log('📦 Using selected rate for shipping method:', normalizedShippingMethod);
     } else {
       // For free delivery options, normalize the shipping type
       const shippingTypeLower = formData.shippingType.toLowerCase().trim();
+      console.log('📦 Normalizing shipping type:', { 
+        original: formData.shippingType, 
+        lowercased: shippingTypeLower 
+      });
       if (shippingTypeLower === 'local pickup') {
         normalizedShippingMethod = 'Local Pickup';
       } else if (shippingTypeLower === 'hand delivery') {
@@ -340,11 +345,10 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
       } else {
         normalizedShippingMethod = formData.shippingMethod || formData.shippingType || 'Standard';
       }
+      console.log('📦 Normalized to:', normalizedShippingMethod);
     }
 
-    console.log('📤 Submitting Order with shipping_method:', normalizedShippingMethod);
-    console.log('📦 Selected Rate object:', selectedRate);
-    console.log('📦 Shipping Type from form:', formData.shippingType);
+    console.log('📤 Final shipping_method being saved:', normalizedShippingMethod);
 
     // Cash payments are always paid immediately
     const isCashPayment = formData.paymentMethod === 'cash';
