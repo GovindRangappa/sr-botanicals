@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import Script from 'next/script';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -679,5 +680,6 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
