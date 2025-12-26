@@ -7,6 +7,7 @@ import { Shippo } from 'shippo';
 import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmation";
 import { sendOwnerPickupNotificationEmail } from "@/lib/email/sendOwnerPickupNotification";
 import { sendOwnerShippingNotificationEmail } from "@/lib/email/sendOwnerShippingNotification";
+import { sendShipmentConfirmationEmail } from "@/lib/email/sendShipmentConfirmation";
 
 export const config = {
   api: {
@@ -278,6 +279,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 } else {
                   console.log("✅ Shipping label created & saved");
                 }
+
+                // Send customer shipment email (once)
+                if (!orderForLabel.shipment_email_sent) {
+                  try {
+                    await sendShipmentConfirmationEmail({
+                      ...orderForLabel,
+                      tracking_number: trackingNumber,
+                    });
+
+                    await supabase
+                      .from("orders")
+                      .update({ shipment_email_sent: true })
+                      .eq("id", orderForLabel.id);
+
+                    console.log("✓ Shipment confirmation email sent");
+                  } catch (err) {
+                    console.error("❌ Failed to send shipment email:", err);
+                  }
+                }
               } else {
                 console.error("❌ Shippo label creation failed:", transaction.messages);
               }
@@ -369,6 +389,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     console.error("❗ Failed to update manual invoice order with label:", labelUpdateError);
                   } else {
                     console.log("✅ Shipping label created & saved for manual invoice order");
+                  }
+
+                  // Send customer shipment email (once)
+                  if (!orderToLabel?.shipment_email_sent) {
+                    try {
+                      await sendShipmentConfirmationEmail({
+                        ...orderToLabel,
+                        tracking_number: trackingNumber,
+                      });
+
+                      await supabase
+                        .from("orders")
+                        .update({ shipment_email_sent: true })
+                        .eq("id", orderId);
+
+                      console.log("✓ Shipment confirmation email sent");
+                    } catch (err) {
+                      console.error("❌ Failed to send shipment email:", err);
+                    }
                   }
                 } else {
                   console.error("❌ Shippo label creation failed:", transaction.messages);
