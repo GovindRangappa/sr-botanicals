@@ -82,6 +82,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             size: null,
             price: product.price,
             stripe_price_id: product.stripe_price_id,
+            netWeight: product.netWeight || null,
         });
         } else {
         for (const variant of productVariants) {
@@ -91,6 +92,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             size: variant.size,
             price: variant.price,
             stripe_price_id: variant.stripe_price_id,
+            netWeight: variant.netWeight || product.netWeight || null,
             });
         }
         }
@@ -208,6 +210,8 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
         size: product.size,
         quantity: 1,
         price: product.price,
+        netWeight: product.netWeight || null,
+        weightOz: product.netWeight || null, // Include both for compatibility
         }]);
     }
 
@@ -221,6 +225,30 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
   };
 
   const fetchRates = async () => {
+    // Validate required address fields
+    if (!formData.street?.trim() || !formData.city?.trim() || !formData.state?.trim() || !formData.zip?.trim()) {
+      alert('Please fill in all address fields (street, city, state, and zip code) before getting shipping rates.');
+      return;
+    }
+
+    // Validate that products are selected
+    if (selectedProducts.length === 0) {
+      alert('Please add at least one product before getting shipping rates.');
+      return;
+    }
+
+    // Calculate total weight based on products and quantities
+    // Default to 20oz per product if weight is not available
+    const totalWeightOz = selectedProducts.reduce((sum, product) => {
+      const productWeight = product.weightOz || product.netWeight || 20;
+      return sum + (productWeight * (product.quantity || 1));
+    }, 0);
+
+    if (totalWeightOz <= 0) {
+      alert('Unable to calculate shipping weight. Please ensure products have weight information.');
+      return;
+    }
+
     try {
       const res = await fetch('/api/get-rates', {
         method: 'POST',
@@ -228,19 +256,27 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({
           address: {
             name: `${formData.firstName} ${formData.lastName}`,
-            street: formData.street,
-            city: formData.city,
-            state: formData.state,
-            zip: formData.zip,
+            street: formData.street.trim(),
+            city: formData.city.trim(),
+            state: formData.state.trim(),
+            zip: formData.zip.trim(),
           },
-          weightOz: selectedProducts.length * 20,
+          weightOz: totalWeightOz,
         }),
       });
 
       const data = await res.json();
 
+      if (!res.ok) {
+        console.error("❌ Error from /api/get-rates:", data);
+        alert(data.error || 'Failed to fetch shipping rates. Please check your address and try again.');
+        setRates([]);
+        return;
+      }
+
       if (!data || !Array.isArray(data.rates)) {
         console.error("❌ Invalid shipping rates response from /api/get-rates:", data);
+        alert('Invalid response from shipping service. Please try again.');
         setRates([]);
         return;
       }
@@ -252,6 +288,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
 
     } catch (err) {
       console.error("❌ Error fetching rates:", err);
+      alert('Failed to fetch shipping rates. Please check your connection and try again.');
       setRates([]);
     }
   };
