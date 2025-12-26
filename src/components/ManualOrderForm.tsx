@@ -451,6 +451,29 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
         }
     }
 
+    // 📧 Send notifications if order is paid (cash payment or marked as paid)
+    // For cash payments, invoice is marked as paid immediately
+    // For card payments, if admin checked "Paid", order is already marked as paid
+    if (formData.paid || formData.paymentMethod === 'cash') {
+        try {
+            const notificationRes = await fetch('/api/send-manual-order-notifications', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId: data.id }),
+            });
+
+            const notificationResult = await notificationRes.json();
+            if (notificationRes.ok) {
+                console.log('✅ Notifications sent for manual order:', notificationResult);
+            } else {
+                console.error('❌ Failed to send notifications:', notificationResult);
+            }
+        } catch (notificationError) {
+            console.error('❌ Error sending notifications:', notificationError);
+            // Don't block the user - notifications are sent in background
+        }
+    }
+
     onClose();
     }; 
 
