@@ -1,9 +1,10 @@
 // app/admin/manual-order.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import Script from 'next/script';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,6 +27,7 @@ export default function ManualOrderEntry() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [fulfilled, setFulfilled] = useState(false);
   const [message, setMessage] = useState('');
+  const autocompleteRef = useRef<HTMLInputElement | null>(null);
 
   const addProduct = () => {
     setProducts([...products, { name: '', quantity: 1, price: 0 }]);
@@ -53,6 +55,68 @@ export default function ManualOrderEntry() {
     : 5; // or dynamically set if needed
 
   const total = +(subtotal + tax + shippingCost).toFixed(2);
+
+  useEffect(() => {
+    // Only initialize if address fields should be shown
+    if (shipping.method !== "Paid Shipping" && shipping.method !== "Hand Delivery") {
+      return;
+    }
+
+    function initAutocomplete() {
+      if (!window.google?.maps?.places || !autocompleteRef.current) return;
+
+      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
+      });
+
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+
+        const addressComponents: any = {
+          street: '',
+          city: '',
+          state: '',
+          zip: '',
+        };
+
+        place.address_components.forEach(component => {
+          const types = component.types;
+          if (types.includes('street_number')) addressComponents.street = component.long_name;
+          if (types.includes('route')) addressComponents.street += ` ${component.long_name}`;
+          if (types.includes('locality')) addressComponents.city = component.long_name;
+          if (types.includes('administrative_area_level_1')) addressComponents.state = component.short_name;
+          if (types.includes('postal_code')) addressComponents.zip = component.long_name;
+        });
+
+        setShipping(prev => ({
+          ...prev,
+          street: addressComponents.street.trim(),
+          city: addressComponents.city,
+          state: addressComponents.state,
+          zip: addressComponents.zip,
+        }));
+
+        if (autocompleteRef.current) {
+          autocompleteRef.current.value = `${addressComponents.street.trim()}, ${addressComponents.city}, ${addressComponents.state}, ${addressComponents.zip}`;
+        }
+      });
+    }
+
+    // Check if Google Maps is already loaded
+    if (window.google?.maps?.places) {
+      initAutocomplete();
+    } else {
+      // Wait for Google Maps script to load
+      window.addEventListener('googleMapsLoaded', initAutocomplete);
+
+      // Cleanup
+      return () => {
+        window.removeEventListener('googleMapsLoaded', initAutocomplete);
+      };
+    }
+  }, [shipping.method]);
 
   const handleSubmit = async () => {
     if (!customer.name || !customer.email || products.length === 0) {
@@ -87,9 +151,25 @@ export default function ManualOrderEntry() {
     }
   };
 
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-8 bg-[#f5f2e8] min-h-screen font-garamond">
-      <h1 className="text-3xl font-bold text-[#3c2f2f]">Manual Order Entry</h1>
+    <>
+      {googleMapsApiKey && (
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
+          strategy="afterInteractive"
+          onLoad={() => {
+            console.log('Google Maps script loaded');
+            window.dispatchEvent(new Event('googleMapsLoaded'));
+          }}
+          onError={() => {
+            console.error('Google Maps API failed to load. Please check your API key and ensure Maps JavaScript API and Places API are enabled.');
+          }}
+        />
+      )}
+      <div className="max-w-3xl mx-auto p-6 space-y-8 bg-[#f5f2e8] min-h-screen font-garamond">
+        <h1 className="text-3xl font-bold text-[#3c2f2f]">Manual Order Entry</h1>
 
       <section className="bg-white p-4 rounded shadow">
         <h2 className="text-xl font-semibold mb-2">Customer Info</h2>
@@ -119,11 +199,20 @@ export default function ManualOrderEntry() {
           <option value="Hand Delivery">Hand Delivery</option>
           <option value="Paid Shipping">Paid Shipping</option>
         </select>
-        <input placeholder="Recipient Name" value={shipping.name} onChange={e => setShipping({ ...shipping, name: e.target.value })} className="w-full p-2 mb-2 border rounded" />
-        <input placeholder="Street" value={shipping.street} onChange={e => setShipping({ ...shipping, street: e.target.value })} className="w-full p-2 mb-2 border rounded" />
-        <input placeholder="City" value={shipping.city} onChange={e => setShipping({ ...shipping, city: e.target.value })} className="w-full p-2 mb-2 border rounded" />
-        <input placeholder="State" value={shipping.state} onChange={e => setShipping({ ...shipping, state: e.target.value })} className="w-full p-2 mb-2 border rounded" />
-        <input placeholder="ZIP" value={shipping.zip} onChange={e => setShipping({ ...shipping, zip: e.target.value })} className="w-full p-2 border rounded" />
+        {(shipping.method === "Paid Shipping" || shipping.method === "Hand Delivery") && (
+          <>
+            <input placeholder="Recipient Name" value={shipping.name} onChange={e => setShipping({ ...shipping, name: e.target.value })} className="w-full p-2 mb-2 border rounded" />
+            <input 
+              ref={autocompleteRef}
+              placeholder="Start typing address..."
+              className="w-full p-2 mb-2 border rounded"
+            />
+            <input placeholder="Street" value={shipping.street} onChange={e => setShipping({ ...shipping, street: e.target.value })} className="w-full p-2 mb-2 border rounded" readOnly />
+            <input placeholder="City" value={shipping.city} onChange={e => setShipping({ ...shipping, city: e.target.value })} className="w-full p-2 mb-2 border rounded" readOnly />
+            <input placeholder="State" value={shipping.state} onChange={e => setShipping({ ...shipping, state: e.target.value })} className="w-full p-2 mb-2 border rounded" readOnly />
+            <input placeholder="ZIP" value={shipping.zip} onChange={e => setShipping({ ...shipping, zip: e.target.value })} className="w-full p-2 border rounded" readOnly />
+          </>
+        )}
       </section>
 
       <section className="bg-white p-4 rounded shadow">
@@ -146,6 +235,7 @@ export default function ManualOrderEntry() {
         <button onClick={handleSubmit} className="mt-4 px-6 py-3 rounded bg-[#2f5d50] hover:bg-[#24493f] text-white font-semibold">Submit Order</button>
         {message && <p className="mt-2 text-sm text-[#3c2f2f]">{message}</p>}
       </div>
-    </div>
+      </div>
+    </>
   );
 }
