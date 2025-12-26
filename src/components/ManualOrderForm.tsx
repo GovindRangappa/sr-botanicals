@@ -417,8 +417,27 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
     onClose();
     }; 
 
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  if (!googleMapsApiKey) {
+    console.warn('⚠️ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set in ManualOrderForm');
+  }
 
   return (
+    <>
+      {googleMapsApiKey && (
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
+          strategy="afterInteractive"
+          onLoad={() => {
+            console.log('✅ Google Maps script loaded in ManualOrderForm');
+            window.dispatchEvent(new Event('googleMapsLoaded'));
+          }}
+          onError={() => {
+            console.error('❌ Google Maps API failed to load in ManualOrderForm. Please check your API key and ensure Maps JavaScript API and Places API are enabled.');
+          }}
+        />
+      )}
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
       <div className="bg-[#f5f2e8] p-6 rounded-xl shadow-lg w-full max-w-3xl relative font-['Playfair_Display'] text-[#3c2f2f] max-h-[90vh] overflow-y-auto">
         <button onClick={onClose} className="absolute top-4 right-4 text-xl">×</button>
