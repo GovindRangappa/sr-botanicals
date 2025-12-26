@@ -56,6 +56,69 @@ export default function ManualOrderEntry() {
 
   const total = +(subtotal + tax + shippingCost).toFixed(2);
 
+  useEffect(() => {
+    function initAutocomplete() {
+      if (!window.google?.maps?.places || !autocompleteRef.current) return;
+      if (shipping.method !== "paid_shipping") return;
+
+      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
+        types: ['address'],
+        componentRestrictions: { country: 'us' },
+      });
+
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (!place.address_components) return;
+
+        const addressComponents: any = {
+          street: '',
+          city: '',
+          state: '',
+          zip: '',
+        };
+
+        place.address_components.forEach(component => {
+          const types = component.types;
+          if (types.includes('street_number')) addressComponents.street = component.long_name;
+          if (types.includes('route')) addressComponents.street += ` ${component.long_name}`;
+          if (types.includes('locality')) addressComponents.city = component.long_name;
+          if (types.includes('administrative_area_level_1')) addressComponents.state = component.short_name;
+          if (types.includes('postal_code')) addressComponents.zip = component.long_name;
+        });
+
+        setShipping(prev => ({
+          ...prev,
+          street: addressComponents.street.trim(),
+          city: addressComponents.city,
+          state: addressComponents.state,
+          zip: addressComponents.zip,
+        }));
+
+        if (autocompleteRef.current) {
+          autocompleteRef.current.value = `${addressComponents.street.trim()}, ${addressComponents.city}, ${addressComponents.state}, ${addressComponents.zip}`;
+        }
+      });
+    }
+
+    // Only initialize if paid_shipping is selected
+    if (shipping.method !== "paid_shipping") return;
+
+    // Wait for Google Maps script to load
+    window.addEventListener('googleMapsLoaded', initAutocomplete);
+
+    // Also check if already loaded
+    if (window.google?.maps?.places && autocompleteRef.current) {
+      // Small delay to ensure DOM is ready after conditional render
+      const timeoutId = setTimeout(initAutocomplete, 100);
+      return () => clearTimeout(timeoutId);
+    }
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('googleMapsLoaded', initAutocomplete);
+    };
+  }, [shipping.method]);
+
   const handleSubmit = async () => {
     if (!customer.name || !customer.email || products.length === 0) {
       setMessage('Please complete all required fields.');
@@ -98,75 +161,6 @@ export default function ManualOrderEntry() {
   };
 
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-  // Callback ref to ensure autocomplete initializes when input is mounted
-  const setAutocompleteRef = (element: HTMLInputElement | null) => {
-    autocompleteRef.current = element;
-    
-    if (!element || shipping.method !== "paid_shipping") {
-      return;
-    }
-
-    // Prevent multiple initializations
-    if ((element as any).__autocompleteInitialized) {
-      return;
-    }
-
-    const initAutocomplete = () => {
-      if (!window.google?.maps?.places) {
-        console.log('Waiting for Google Maps Places API...');
-        return;
-      }
-      if (!autocompleteRef.current) return;
-      if ((autocompleteRef.current as any).__autocompleteInitialized) return;
-
-      console.log('Initializing Google Places Autocomplete');
-      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteRef.current, {
-        types: ['address'],
-        componentRestrictions: { country: 'us' },
-      });
-
-      (autocompleteRef.current as any).__autocompleteInitialized = true;
-
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace();
-        if (!place.address_components) return;
-
-        const address: any = { street: "", city: "", state: "", zip: "" };
-        place.address_components.forEach(c => {
-          const types = c.types;
-          if (types.includes('street_number')) address.street = c.long_name;
-          if (types.includes('route')) address.street += ` ${c.long_name}`;
-          if (types.includes('locality')) address.city = c.long_name;
-          if (types.includes('administrative_area_level_1')) address.state = c.short_name;
-          if (types.includes('postal_code')) address.zip = c.long_name;
-        });
-
-        setShipping(prev => ({
-          ...prev,
-          street: address.street.trim(),
-          city: address.city,
-          state: address.state,
-          zip: address.zip,
-        }));
-
-        if (autocompleteRef.current) {
-          autocompleteRef.current.value = `${address.street.trim()}, ${address.city}, ${address.state} ${address.zip}`;
-        }
-      });
-    };
-
-    if (window.google?.maps?.places) {
-      // Small delay to ensure DOM is ready
-      setTimeout(initAutocomplete, 100);
-    } else {
-      const handleLoad = () => {
-        setTimeout(initAutocomplete, 100);
-        window.removeEventListener('googleMapsLoaded', handleLoad);
-      };
-      window.addEventListener('googleMapsLoaded', handleLoad);
-    }
-  };
 
   return (
     <>
@@ -219,7 +213,7 @@ export default function ManualOrderEntry() {
             <input placeholder="Recipient Name" value={shipping.name} onChange={e => setShipping({ ...shipping, name: e.target.value })} className="w-full p-2 mb-2 border rounded" />
             {shipping.method === "paid_shipping" && (
               <input 
-                ref={setAutocompleteRef}
+                ref={autocompleteRef}
                 placeholder="Start typing address..."
                 className="w-full p-2 mb-2 border rounded"
               />
