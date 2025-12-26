@@ -14,6 +14,8 @@ const supabase = createClient(
 export default function ManualOrderEntry() {
   const router = useRouter();
 
+  console.log('📄 ManualOrderEntry component rendered');
+
   const [products, setProducts] = useState([{ name: '', quantity: 1, price: 0 }]);
   const [customer, setCustomer] = useState({ name: '', email: '', phone: '' });
   const [shipping, setShipping] = useState({
@@ -193,6 +195,10 @@ export default function ManualOrderEntry() {
 
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
+  if (!googleMapsApiKey) {
+    console.warn('⚠️ NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set');
+  }
+
   return (
     <>
       {googleMapsApiKey && (
@@ -200,11 +206,11 @@ export default function ManualOrderEntry() {
           src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
           strategy="afterInteractive"
           onLoad={() => {
-            console.log('Google Maps script loaded');
+            console.log('✅ Google Maps script loaded');
             window.dispatchEvent(new Event('googleMapsLoaded'));
           }}
           onError={() => {
-            console.error('Google Maps API failed to load. Please check your API key and ensure Maps JavaScript API and Places API are enabled.');
+            console.error('❌ Google Maps API failed to load. Please check your API key and ensure Maps JavaScript API and Places API are enabled.');
           }}
         />
       )}
