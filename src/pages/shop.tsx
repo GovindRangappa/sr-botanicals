@@ -13,6 +13,7 @@ const supabase = createClient(
 export default function Shop() {
   const router = useRouter();
   const sectionRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const [shopData, setShopData] = useState<{
     [category: string]: { [subcategory: string]: any[] };
   }>({});
@@ -53,6 +54,95 @@ export default function Shop() {
     }
   }, [router.asPath, shopData]);
 
+  // Use JavaScript to make sidebar stick since CSS sticky isn't working due to body/html overflow
+  useEffect(() => {
+    if (!sidebarRef.current) return;
+
+    const sidebar = sidebarRef.current;
+    const parentContainer = sidebar.parentElement;
+    if (!parentContainer) return;
+
+    // Find the main content element (sibling after sidebar)
+    const mainContent = parentContainer.querySelector('main');
+    if (!mainContent) return;
+
+    let initialOffsetTop = 0;
+    let initialLeft = 0;
+    let sidebarWidth = 0;
+
+    const updatePosition = () => {
+      if (!sidebarRef.current || !parentContainer || !mainContent) return;
+
+      const scrollY = window.scrollY || window.pageYOffset;
+      const parentRect = parentContainer.getBoundingClientRect();
+      
+      // Calculate the initial position on first run
+      if (initialOffsetTop === 0) {
+        initialOffsetTop = parentContainer.offsetTop;
+        initialLeft = parentRect.left;
+        sidebarWidth = sidebar.offsetWidth;
+      }
+
+      // Get the navbar height
+      const navbar = document.querySelector('nav');
+      const navbarHeight = navbar ? navbar.getBoundingClientRect().height : 0;
+      
+      // Calculate if sidebar should be sticky
+      // Sidebar should stick when the parent container's top reaches the navbar
+      const shouldStick = scrollY >= initialOffsetTop - navbarHeight;
+      
+      if (shouldStick && parentRect.top <= navbarHeight) {
+        // Sidebar should be sticky - use fixed positioning
+        sidebar.style.position = 'fixed';
+        sidebar.style.top = `${navbarHeight + 16}px`; // Add 16px (1rem) spacing from top
+        sidebar.style.left = `${initialLeft + 16}px`; // Add 16px (1rem) spacing from left
+        sidebar.style.width = `${sidebarWidth}px`;
+        // Add margin-left to main content to reserve space for fixed sidebar
+        // sidebarWidth (160px) + pr-6 (24px padding) + left margin (16px) = 200px total
+        (mainContent as HTMLElement).style.marginLeft = `${sidebarWidth + 24 + 16}px`;
+      } else {
+        // Sidebar should be in normal flow
+        sidebar.style.position = '';
+        sidebar.style.top = '';
+        sidebar.style.left = '';
+        sidebar.style.width = '';
+        // Remove the margin when sidebar is in normal flow
+        (mainContent as HTMLElement).style.marginLeft = '';
+      }
+    };
+
+    // Initial calculation
+    const timeoutId = setTimeout(updatePosition, 100);
+
+    // Update on scroll (throttled)
+    let scrollTimeout: NodeJS.Timeout;
+    const handleScroll = () => {
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(updatePosition, 10);
+    };
+    
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      clearTimeout(timeoutId);
+      clearTimeout(scrollTimeout);
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', updatePosition);
+      
+      // Reset styles on cleanup
+      if (sidebarRef.current) {
+        sidebarRef.current.style.position = '';
+        sidebarRef.current.style.top = '';
+        sidebarRef.current.style.left = '';
+        sidebarRef.current.style.width = '';
+      }
+      if (mainContent) {
+        (mainContent as HTMLElement).style.marginLeft = '';
+      }
+    };
+  }, [shopData]);
+
   const scrollToSection = (id: string) => {
     const element = sectionRefs.current[id];
     if (element) {
@@ -72,7 +162,7 @@ export default function Shop() {
         }
       `}</style>
       <NavBar />
-      <div className="bg-[#f5f2e8] text-[#3c2f2f] font-garamond flex flex-col md:flex-row px-4 md:px-6 py-6 md:py-12">
+      <div className="bg-[#f5f2e8] text-[#3c2f2f] font-garamond flex flex-col md:flex-row px-4 md:pl-8 md:pr-6 py-6 md:py-12 relative">
         {/* Mobile Category Toggle */}
         <div className="block md:hidden mb-6">
           <details className="bg-white rounded-md shadow-md">
@@ -110,7 +200,16 @@ export default function Shop() {
         </div>
 
         {/* Sidebar - Hidden on Mobile */}
-        <aside className="hidden md:block w-40 pr-6 border-r border-[#d9d9d9] sticky top-0 h-fit flex-shrink-0">
+        <aside 
+          ref={sidebarRef}
+          className="hidden md:block w-40 pr-6 border-r border-[#d9d9d9] flex-shrink-0 z-10 self-start"
+          style={{ 
+            maxHeight: 'calc(100vh - 4rem)', 
+            overflowY: 'auto',
+            marginTop: '1rem',
+            marginLeft: '1rem',
+          }}
+        >
           <h2 className="text-xl font-bold font-['Playfair_Display'] mb-4">Categories</h2>
           {Object.entries(shopData).map(([category, subcategories]) => (
             <div key={category} className="mb-6">
@@ -140,7 +239,7 @@ export default function Shop() {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 md:pl-6 overflow-y-auto hide-scrollbar">
+        <main className="flex-1 md:pl-6">
           <h1 className="text-4xl font-bold text-[#3c2f2f] font-['Playfair_Display'] mb-8 text-center">Shop</h1>
 
           {Object.entries(shopData).map(([category, subcategories]) => (
