@@ -36,6 +36,14 @@ type Props = {
   carrier: string;
   trackingNumber: string;
   trackingUrl?: string;
+  shippingAddress?: {
+    name?: string;
+    street1?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+  };
+  estimatedDays?: number | null;
 };
 
 export default function ShipmentConfirmationEmail({
@@ -43,7 +51,18 @@ export default function ShipmentConfirmationEmail({
   orderId,
   carrier,
   trackingNumber,
+  shippingAddress,
+  estimatedDays,
 }: Props) {
+  // Calculate estimated delivery window
+  let estimatedMinDate: Date | null = null;
+  let estimatedMaxDate: Date | null = null;
+  
+  if (estimatedDays !== null && estimatedDays !== undefined) {
+    estimatedMinDate = new Date(Date.now() + estimatedDays * 24 * 60 * 60 * 1000);
+    estimatedMaxDate = new Date(Date.now() + (estimatedDays + 2) * 24 * 60 * 60 * 1000);
+  }
+
   return (
     <Html>
       <Head />
@@ -63,6 +82,23 @@ export default function ShipmentConfirmationEmail({
 
           <Hr style={styles.hr} />
 
+          {shippingAddress && (
+            <>
+              <Text style={styles.text}>
+                <strong>Shipping Address:</strong>
+                <br />
+                {shippingAddress.name && <>{shippingAddress.name}<br /></>}
+                {shippingAddress.street1 && <>{shippingAddress.street1}<br /></>}
+                {shippingAddress.city && shippingAddress.state && shippingAddress.zip && (
+                  <>
+                    {shippingAddress.city}, {shippingAddress.state} {shippingAddress.zip}
+                  </>
+                )}
+              </Text>
+              <Hr style={styles.hr} />
+            </>
+          )}
+
           <Text style={styles.text}>
             <strong>Carrier:</strong> {carrier}
             <br />
@@ -78,6 +114,27 @@ export default function ShipmentConfirmationEmail({
               Track your shipment
             </Link>
           </Text>
+
+          {estimatedMinDate && estimatedMaxDate && (
+            <>
+              <Hr style={styles.hr} />
+              <Text style={styles.text}>
+                <strong>Estimated Delivery Window:</strong>
+                <br />
+                {estimatedMinDate.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}{" "}
+                –{" "}
+                {estimatedMaxDate.toLocaleDateString("en-US", {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })}
+              </Text>
+            </>
+          )}
 
           <Hr style={styles.hr} />
 
