@@ -8,7 +8,7 @@ import { ShoppingBagIcon, Bars3Icon, XMarkIcon } from '@heroicons/react/24/outli
 
 export default function NavBar() {
   const { cart, toggleCart } = useCart();
-  const cartItemCount = cart?.reduce((sum, item) => sum + item.quantity, 0) || 0;
+  const cartItemCount = cart?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
   const [menuOpen, setMenuOpen] = useState(false);
 
   const navLinks = [
@@ -22,7 +22,7 @@ export default function NavBar() {
   return (
     <>
       {/* Desktop Nav */}
-      <nav className="hidden md:flex relative items-center justify-center py-6 bg-white shadow-md">
+      <nav className="hidden xl:flex relative items-center justify-center py-6 bg-white shadow-md">
         {/* Logo Left */}
         <div className="absolute left-4 top-1/2 -translate-y-1/2">
           <Link href="/">
@@ -37,7 +37,7 @@ export default function NavBar() {
         </div>
 
         {/* Nav Links Right */}
-        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center space-x-5 text-base md:text-lg font-medium text-gray-700 font-['Playfair_Display']">
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center space-x-5 text-base xl:text-lg font-medium text-gray-700 font-['Playfair_Display']">
           {navLinks.map(link => (
             <Link key={link.href} href={link.href}>
               <span className="hover:text-green-700 transition">{link.name}</span>
@@ -55,13 +55,13 @@ export default function NavBar() {
         </div>
 
         {/* Title Center */}
-        <h1 className="text-4xl md:text-5xl tracking-wide text-green-900 font-[Italiana] text-center">
+        <h1 className="text-4xl xl:text-5xl tracking-wide text-green-900 font-[Italiana] text-center">
           SR Botanicals
         </h1>
       </nav>
 
       {/* Mobile Nav */}
-      <nav className="md:hidden bg-white shadow-md p-4 flex justify-between items-center">
+      <nav className="xl:hidden bg-white shadow-md p-4 flex justify-between items-center">
         {/* Logo */}
         <Link href="/">
           <Image src="/logo.png" alt="SR Botanicals Logo" width={60} height={60} />
@@ -92,7 +92,7 @@ export default function NavBar() {
 
       {/* Mobile Menu Dropdown */}
       {menuOpen && (
-        <div className="md:hidden bg-[#f5f2ea] text-[#3c2f2f] font-['Playfair_Display'] px-4 pb-4 shadow-md">
+        <div className="xl:hidden bg-[#f5f2ea] text-[#3c2f2f] font-['Playfair_Display'] px-4 pb-4 shadow-md">
           <ul className="space-y-2 text-base">
             {navLinks.map(link => (
               <li key={link.href}>
