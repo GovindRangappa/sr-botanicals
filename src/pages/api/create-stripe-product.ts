@@ -1,6 +1,7 @@
 // pages/api/create-stripe-product.ts
 import { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -9,7 +10,20 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end('Method not allowed');
 
+  // Require admin authentication
+  const isAdmin = await requireAdmin(req, res);
+  if (!isAdmin) return; // Response already sent by requireAdmin
+
   const { name, price } = req.body;
+
+  // Validate inputs
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return res.status(400).json({ error: 'Invalid product name' });
+  }
+
+  if (typeof price !== 'number' || price <= 0 || !isFinite(price)) {
+    return res.status(400).json({ error: 'Invalid price' });
+  }
 
   console.log('📦 Incoming create-stripe-product request:', { name, price });
 

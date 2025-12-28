@@ -11,6 +11,22 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Helper function to get auth headers
+async function getAuthHeaders(): Promise<HeadersInit> {
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch (error) {
+    console.error('Error getting auth session:', error);
+  }
+  return headers;
+}
+
 export default function StorageCleanup() {
   useAdminGuard();
 
@@ -43,7 +59,10 @@ export default function StorageCleanup() {
 
         // ✅ This version calls your server-side API instead of Supabase directly from the browser
         try {
-          const response = await fetch('/api/admin/list-storage');
+          const headers = await getAuthHeaders();
+          const response = await fetch('/api/admin/list-storage', {
+            headers,
+          });
           const json = await response.json();
 
           if (json.error) {
@@ -82,10 +101,11 @@ export default function StorageCleanup() {
 
     try {
       const fileList = Array.from(selected);
+      const headers = await getAuthHeaders();
 
       const response = await fetch('/api/admin/delete-storage', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ files: fileList }),
       });
 

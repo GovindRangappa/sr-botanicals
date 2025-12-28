@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -7,8 +8,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
   const { first_name, last_name, email, phone, message, sender = 'customer', type = 'text' } = req.body;
-  if (!first_name || !last_name || !email || !message) {
-    return res.status(400).json({ error: 'Missing required fields' });
+  
+  // Validate inputs
+  if (!first_name || typeof first_name !== 'string' ||
+      !last_name || typeof last_name !== 'string' ||
+      !email || typeof email !== 'string' ||
+      !message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid required fields' });
+  }
+
+  // Sanitize inputs
+  const sanitizedFirstName = sanitizeHtml(first_name.trim());
+  const sanitizedLastName = sanitizeHtml(last_name.trim());
+  const sanitizedEmail = email.trim().toLowerCase(); // Email doesn't need HTML sanitization, but validate format
+  const sanitizedMessage = sanitizeHtml(message.trim());
+  const sanitizedPhone = phone ? phone.trim() : null;
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(sanitizedEmail)) {
+    return res.status(400).json({ error: 'Invalid email format' });
+  }
+
+  // Validate sender value
+  if (sender !== 'customer' && sender !== 'business') {
+    return res.status(400).json({ error: 'Invalid sender value' });
   }
 
   try {
@@ -30,16 +54,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!customerId) {
       const { data: newCustomer, error: insertError } = await supabase
         .from('customers')
-        .insert([{ first_name, last_name, email, phone: phone ?? null }])
+        .insert([{ first_name: sanitizedFirstName, last_name: sanitizedLastName, email: sanitizedEmail, phone: sanitizedPhone }])
         .select()
         .single();
 
       if (insertError) throw insertError;
       customerId = newCustomer.id;
-    } else if (phone && !existingCustomer.phone) {
+    } else if (sanitizedPhone && !existingCustomer.phone) {
       const { error: updateError } = await supabase
         .from('customers')
-        .update({ phone })
+        .update({ phone: sanitizedPhone })
         .eq('id', existingCustomer.id);
 
       if (updateError) throw updateError;
@@ -49,7 +73,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { error: messageError } = await supabase.from('messages').insert([{
       customer_id: customerId,
       sender,
-      message,
+      message: sanitizedMessage,
       type
     }]);
 

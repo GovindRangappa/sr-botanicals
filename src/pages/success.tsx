@@ -40,17 +40,21 @@ export default function Success() {
         .select("*")
         .eq("stripe_checkout_id", session_id);
 
-      if (!error) {
-        setOrders(data || []);
+      if (!error && data && data.length > 0) {
+        setOrders(data);
         clearCart();
 
         try {
+          // Pass customer email for session ownership validation
           const stripeRes = await fetch("/api/get-checkout-session", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ session_id }),
+            body: JSON.stringify({ 
+              session_id,
+              customer_email: data[0]?.customer_email, // Pass email from order for validation
+            }),
           });
 
           const stripeData = await stripeRes.json();

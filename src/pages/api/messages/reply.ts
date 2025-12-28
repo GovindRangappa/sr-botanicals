@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -8,14 +10,26 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
 
+  // Require admin authentication
+  const isAdmin = await requireAdmin(req, res);
+  if (!isAdmin) return; // Response already sent by requireAdmin
+
   const { customerId, message } = req.body;
-  if (!customerId || !message) return res.status(400).json({ error: 'Missing fields' });
+  if (!customerId || typeof customerId !== 'number' || !message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid fields' });
+  }
+
+  // Sanitize message to prevent XSS
+  const sanitizedMessage = sanitizeHtml(message.trim());
+  if (!sanitizedMessage) {
+    return res.status(400).json({ error: 'Message cannot be empty' });
+  }
 
   try {
     // 1️⃣ Insert reply into messages table
     const { error: insertError } = await supabase
       .from('messages')
-      .insert([{ customer_id: customerId, sender: 'business', message, type: 'text' }]);
+      .insert([{ customer_id: customerId, sender: 'business', message: sanitizedMessage, type: 'text' }]);
 
     if (insertError) throw insertError;
 
@@ -28,6 +42,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (customerError) throw customerError;
 
+    // Sanitize customer name for email
+    const sanitizedFirstName = sanitizeHtml(customer.first_name || 'there');
+
     // 3️⃣ Send email via Resend
     await resend.emails.send({
       from: 'support@sr-botanicals.com',
@@ -35,8 +52,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       to: customer.email,
       subject: `Reply from SR Botanicals`,
       html: `
-        <p>Hi ${customer.first_name},</p>
-        <p>${message}</p>
+        <p>Hi ${sanitizedFirstName},</p>
+        <p>${sanitizedMessage.replace(/\n/g, '<br/>')}</p>
         <p>— SR Botanicals Team</p>
       `
     });

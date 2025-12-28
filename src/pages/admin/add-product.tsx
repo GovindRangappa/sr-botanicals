@@ -165,9 +165,20 @@ export default function AddProductPage() {
         const variant = variants[0];
         console.log(`[STRIPE] Creating product for variant size: ${variant.size}, price: $${variant.price}`);
 
+        // Get auth headers for admin API call
+        const { data: { session } } = await supabase.auth.getSession();
+        const authHeaders: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        if (session?.access_token) {
+          authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
         const stripeRes = await axios.post('/api/create-stripe-product', {
           name,
           price: parseFloat(variant.price),
+        }, {
+          headers: authHeaders,
         });
 
         console.log('[STRIPE] Response:', stripeRes.data);
@@ -188,10 +199,21 @@ export default function AddProductPage() {
           }
         }
       } else {
+        // Get auth headers once for all variant calls
+        const { data: { session } } = await supabase.auth.getSession();
+        const authHeaders: HeadersInit = {
+          'Content-Type': 'application/json',
+        };
+        if (session?.access_token) {
+          authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
         for (const variant of variants) {
           const stripeRes = await axios.post('/api/create-stripe-product', {
             name: `${name} (${variant.size})`,
             price: parseFloat(variant.price),
+          }, {
+            headers: authHeaders,
           });
 
           const stripe_price_id = stripeRes.data?.stripe_price_id;

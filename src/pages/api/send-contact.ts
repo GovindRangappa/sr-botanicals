@@ -1,6 +1,7 @@
 // pages/api/send-contact.ts
 import { NextApiRequest, NextApiResponse } from 'next';
 import { Resend } from 'resend';
+import { sanitizeHtml } from '@/lib/utils/sanitizeHtml';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -15,8 +16,10 @@ const validateEmail = async (email: string) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
+    // Note: Abstract API uses query parameters for API keys, which is acceptable
+    // for server-side calls. The key is never exposed to the client.
     const response = await fetch(
-      `https://emailvalidation.abstractapi.com/v1/?api_key=${accessKey}&email=${email}`,
+      `https://emailvalidation.abstractapi.com/v1/?api_key=${accessKey}&email=${encodeURIComponent(email)}`,
       { signal: controller.signal }
     );
 
@@ -43,17 +46,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { firstName, lastName, email, message } = req.body;
   console.log('📥 Request body:', { firstName, lastName, email, message });
 
-  if (!firstName || !lastName || !email || !message) {
+  // Validate input types and presence
+  if (!firstName || typeof firstName !== 'string' || 
+      !lastName || typeof lastName !== 'string' || 
+      !email || typeof email !== 'string' || 
+      !message || typeof message !== 'string') {
     return res.status(400).json({ message: 'Please fill out all required fields.' });
   }
 
-  const fullName = `${firstName} ${lastName}`;
+  // Sanitize inputs to prevent XSS
+  const sanitizedFirstName = sanitizeHtml(firstName.trim());
+  const sanitizedLastName = sanitizeHtml(lastName.trim());
+  const sanitizedEmail = email.trim().toLowerCase(); // Email doesn't need HTML sanitization, but normalize
+  const sanitizedMessage = sanitizeHtml(message.trim());
 
-  const isEmailValid = await validateEmail(email);
+  // Additional validation
+  if (!sanitizedFirstName || !sanitizedLastName || !sanitizedEmail || !sanitizedMessage) {
+    return res.status(400).json({ message: 'Please fill out all required fields.' });
+  }
+
+  // Validate email format (basic check)
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(sanitizedEmail)) {
+    return res.status(400).json({ message: 'Please enter a valid email address.' });
+  }
+
+  const isEmailValid = await validateEmail(sanitizedEmail);
   if (!isEmailValid) {
-    console.warn('❗ Invalid email address:', email);
+    console.warn('❗ Invalid email address:', sanitizedEmail);
     return res.status(400).json({ message: 'Please enter a valid, working email address.' });
   }
+
+  const fullName = `${sanitizedFirstName} ${sanitizedLastName}`;
 
   try {
     const sendResult = await Promise.race([
@@ -62,9 +86,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         to: 'srbotanicals09@gmail.com',
         subject: `New Contact Form Submission from ${fullName}`,
         html: `
-          <p><strong>Name:</strong> ${fullName}</p>
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Message:</strong><br/>${message}</p>
+          <p><strong>Name:</strong> ${sanitizedFirstName} ${sanitizedLastName}</p>
+          <p><strong>Email:</strong> ${sanitizedEmail}</p>
+          <p><strong>Message:</strong><br/>${sanitizedMessage.replace(/\n/g, '<br/>')}</p>
         `,
       }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Email send timeout')), 7000))

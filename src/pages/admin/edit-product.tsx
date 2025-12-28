@@ -462,11 +462,20 @@ export default function EditProduct() {
     if (!confirm(`Are you sure you want to delete "${selectedProduct.name}"?`)) return;
 
     try {
+      // Get auth headers for admin API calls
+      const { data: { session } } = await supabase.auth.getSession();
+      const authHeaders: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (session?.access_token) {
+        authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       // Delete associated image using backend API
       if (selectedProduct.image) {
         const res = await fetch('/api/admin/delete-image', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: authHeaders,
           body: JSON.stringify({ imageUrl: selectedProduct.image })
         });
 
@@ -483,7 +492,7 @@ export default function EditProduct() {
         try {
           const res = await fetch('/api/delete-stripe-product', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: authHeaders,
             body: JSON.stringify({ stripe_price_id: selectedProduct.stripe_price_id })
           });
 

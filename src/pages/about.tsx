@@ -75,9 +75,19 @@ export default function About() {
                     className="overflow-hidden"
                   >
                     <hr className="border-gray-600 mb-6" />
-                    <p className="text-lg leading-relaxed">
-                      Suman Rangappa, DMD, is the founder of <strong>SR Botanicals</strong>. An avid gardener, passionate formulator, and practicing general dentist, she brings hands-on experience with herbs, deep research, and a love for nature. She approaches skin and hair care with a strong understanding of the body, balance, and long-term health. Her products reflect her belief that what is put on the body should be thoughtful and nourishing, gentle, naturally derived, and made with intention.
-                    </p>
+                    <div className="relative min-h-[200px]">
+                      <p className="text-lg leading-relaxed pr-60 pb-4">
+                        Suman Rangappa, DMD, is the founder of <strong>SR Botanicals</strong>. An avid gardener, passionate formulator, and practicing general dentist, she brings hands-on experience with herbs, deep research, and a love for nature. She approaches skin and hair care with a strong understanding of the body, balance, and long-term health. Her products reflect her belief that what is put on the body should be thoughtful and nourishing, gentle, naturally derived, and made with intention.
+                      </p>
+                      <div className="absolute bottom-0 right-0 w-56 h-56 rounded-lg overflow-hidden border-2 border-gray-600">
+                        <Image
+                          src="/suman-nature.jpg"
+                          alt="Suman in nature"
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -192,50 +202,62 @@ export default function About() {
                     className="overflow-hidden"
                   >
                     <hr className="border-gray-600 mb-8" />
-                    <div className="space-y-8">
-                      <div>
-                        <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
-                          Nature-First Formulation
-                        </h3>
-                        <p className="text-lg leading-relaxed">
-                          We believe in using nature's gifts responsibly—formulating with naturally derived ingredients and avoiding unnecessary or harmful additives.
-                        </p>
-                      </div>
+                    <div className="grid md:grid-cols-2 gap-8 items-stretch">
+                      <div className="space-y-8">
+                        <div>
+                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                            Nature-First Formulation
+                          </h3>
+                          <p className="text-lg leading-relaxed">
+                            We believe in using nature's gifts responsibly—formulating with naturally derived ingredients and avoiding unnecessary or harmful additives.
+                          </p>
+                        </div>
 
-                      <div>
-                        <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
-                          Health & Balance
-                        </h3>
-                        <p className="text-lg leading-relaxed">
-                          Our products are designed to be gentle on the skin and hair, without disrupting hormones or the body's natural equilibrium.
-                        </p>
-                      </div>
+                        <div>
+                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                            Health & Balance
+                          </h3>
+                          <p className="text-lg leading-relaxed">
+                            Our products are designed to be gentle on the skin and hair, without disrupting hormones or the body's natural equilibrium.
+                          </p>
+                        </div>
 
-                      <div>
-                        <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
-                          Research & Integrity
-                        </h3>
-                        <p className="text-lg leading-relaxed">
-                          Every formulation is thoughtfully researched and created with care, transparency, and purpose.
-                        </p>
-                      </div>
+                        <div>
+                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                            Research & Integrity
+                          </h3>
+                          <p className="text-lg leading-relaxed">
+                            Every formulation is thoughtfully researched and created with care, transparency, and purpose.
+                          </p>
+                        </div>
 
-                      <div>
-                        <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
-                          Sustainability & Responsibility
-                        </h3>
-                        <p className="text-lg leading-relaxed">
-                          We prioritize ethical sourcing and mindful creation to minimize environmental impact.
-                        </p>
-                      </div>
+                        <div>
+                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                            Sustainability & Responsibility
+                          </h3>
+                          <p className="text-lg leading-relaxed">
+                            We prioritize ethical sourcing and mindful creation to minimize environmental impact.
+                          </p>
+                        </div>
 
-                      <div>
-                        <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
-                          Intentional Living
-                        </h3>
-                        <p className="text-lg leading-relaxed">
-                          We encourage replacing throwaway, unwanted gifts with products that promote wellness, longevity, and care.
-                        </p>
+                        <div>
+                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                            Intentional Living
+                          </h3>
+                          <p className="text-lg leading-relaxed">
+                            We encourage replacing throwaway, unwanted gifts with products that promote wellness, longevity, and care.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="w-full max-w-md mx-auto md:mx-0 md:ml-auto h-full">
+                        <div className="relative w-full h-full rounded-lg overflow-hidden border-2 border-gray-600">
+                          <Image
+                            src="/aboutpage-pic.png"
+                            alt="Stacked handmade soaps"
+                            fill
+                            className="object-cover"
+                          />
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -323,27 +345,6 @@ export default function About() {
           </div>
         </div>
 
-        {/* Image Section at Bottom */}
-        <div className="py-16 px-6 sm:py-24">
-          <div className="max-w-7xl mx-auto">
-            <motion.div
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 1.2, ease: 'easeOut' }}
-              className="max-w-2xl mx-auto"
-            >
-              <div className="relative w-full aspect-[7/8] rounded-3xl overflow-hidden border-[6px] border-[#bfae94] shadow-lg">
-                <Image
-                  src="/aboutpage-pic.png"
-                  alt="Stacked handmade soaps"
-                  fill
-                  className="object-cover"
-                />
-              </div>
-            </motion.div>
-          </div>
-        </div>
       </main>
       <Footer />
     </div>

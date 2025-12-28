@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,6 +10,10 @@ const supabase = createClient(
 );
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  // Require admin authentication
+  const isAdmin = await requireAdmin(req, res);
+  if (!isAdmin) return; // Response already sent by requireAdmin
+
   const { data, error } = await supabase.storage
     .from('product-images')
     .list('', { limit: 1000 });

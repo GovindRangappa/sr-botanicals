@@ -452,9 +452,18 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
 
     console.log('🛒 Invoice payload being sent:', invoicePayload);
 
+    // Get auth headers for admin API call
+    const { data: { session } } = await supabase.auth.getSession();
+    const authHeaders: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (session?.access_token) {
+      authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
     const invoiceRes = await fetch('/api/create-invoice', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify(invoicePayload),
     });
 

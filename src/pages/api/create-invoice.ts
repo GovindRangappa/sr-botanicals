@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
@@ -13,6 +14,10 @@ const supabase = createClient(
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
+
+  // Require admin authentication
+  const isAdmin = await requireAdmin(req, res);
+  if (!isAdmin) return; // Response already sent by requireAdmin
 
   try {
     const {

@@ -1,20 +1,30 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
   apiVersion: '2022-11-15',
 });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  console.log('[DELETE STRIPE PRODUCT] Hit API route'); // ✅ Add this
+  console.log('[DELETE STRIPE PRODUCT] Hit API route');
 
   if (req.method !== 'POST') {
     console.log('[DELETE STRIPE PRODUCT] Invalid method:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Require admin authentication
+  const isAdmin = await requireAdmin(req, res);
+  if (!isAdmin) return; // Response already sent by requireAdmin
+
   try {
     const { stripe_price_id } = req.body;
+
+    // Validate input
+    if (!stripe_price_id || typeof stripe_price_id !== 'string') {
+      return res.status(400).json({ error: 'Invalid stripe_price_id' });
+    }
     console.log('[DELETE STRIPE PRODUCT] Price ID:', stripe_price_id);
 
     // Step 1: Retrieve the price

@@ -1,6 +1,7 @@
 // pages/api/admin/delete-image.ts
 import { createClient } from '@supabase/supabase-js';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { requireAdmin } from '@/lib/auth/requireAdmin';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,6 +10,10 @@ const supabase = createClient(
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method Not Allowed' });
+
+  // Require admin authentication
+  const isAdmin = await requireAdmin(req, res);
+  if (!isAdmin) return; // Response already sent by requireAdmin
 
   const { imageUrl } = req.body;
 

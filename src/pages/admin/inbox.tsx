@@ -1,8 +1,14 @@
 'use client';
 
 import AdminLayout from '@/components/AdminLayout';
-import { useAdminGuard } from '@/hooks/useAdminGuard'; // ✅ NEW
+import { useAdminGuard } from '@/hooks/useAdminGuard';
 import { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 type InboxMessage = {
   id: string;
@@ -33,10 +39,27 @@ export default function InboxAdminPage() {
   const [replyMessage, setReplyMessage] = useState<string>('');
   const [isReplying, setIsReplying] = useState<boolean>(false);
 
+  // Helper function to get auth headers
+  const getAuthHeaders = async (): Promise<HeadersInit> => {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+    } catch (error) {
+      console.error('Error getting auth session:', error);
+    }
+    return headers;
+  };
+
   useEffect(() => {
     async function fetchMessages() {
       try {
-        const res = await fetch('/api/messages/inbox');
+        const headers = await getAuthHeaders();
+        const res = await fetch('/api/messages/inbox', { headers });
         const result = await res.json();
         if (res.ok) {
           setMessages(result.data);
@@ -52,7 +75,10 @@ export default function InboxAdminPage() {
 
   const fetchFullConversation = async (customerId: string) => {
     try {
-      const res = await fetch(`/api/messages/conversation?customer_id=${customerId}`);
+      const headers = await getAuthHeaders();
+      const res = await fetch(`/api/messages/conversation?customer_id=${customerId}`, {
+        headers,
+      });
       const result = await res.json();
       if (res.ok) {
         setFullMessages((prev) => ({ ...prev, [customerId]: result.data }));
@@ -81,9 +107,10 @@ export default function InboxAdminPage() {
     if (!replyMessage.trim()) return;
     setIsReplying(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch('/api/messages/reply', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ customerId, message: replyMessage }),
       });
       if (res.ok) {
