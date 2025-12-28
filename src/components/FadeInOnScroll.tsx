@@ -3,9 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 export default function FadeInOnScroll({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Ensure component is mounted on client to prevent hydration mismatch
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (!isMounted || typeof window === 'undefined') return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -22,13 +28,15 @@ export default function FadeInOnScroll({ children }: { children: React.ReactNode
     return () => {
       if (node) observer.unobserve(node);
     };
-  }, []);
+  }, [isMounted]);
 
+  // On server and initial client render, show content without animation
+  // After mount, apply animation classes
   return (
     <div
       ref={ref}
       className={`transition-all duration-[1500ms] ease-out transform ${
-        isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        !isMounted || isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
       }`}
     >
       {children}

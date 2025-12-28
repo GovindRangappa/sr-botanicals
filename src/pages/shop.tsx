@@ -1,14 +1,9 @@
 import NavBar from '@/components/NavBar';
 import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/utils/supabaseClient';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 export default function Shop() {
   const router = useRouter();
@@ -19,9 +14,6 @@ export default function Shop() {
   }>({});
 
   useEffect(() => {
-    console.log("Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log("Supabase ANON Key:", process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-
     async function fetchProducts() {
       const { data, error } = await supabase.from('products').select('*');
       if (error) {

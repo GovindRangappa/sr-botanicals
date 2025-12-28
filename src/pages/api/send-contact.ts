@@ -44,7 +44,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const { firstName, lastName, email, message } = req.body;
-  console.log('📥 Request body:', { firstName, lastName, email, message });
+  
+  // Sanitized log - redact email and message content for privacy
+  const redactEmail = (email: string) => {
+    if (!email) return 'N/A';
+    const [localPart, domain] = email.split('@');
+    return localPart ? `${localPart.substring(0, 3)}***@${domain || '***'}` : '***';
+  };
+  console.log('📥 Contact form submission:', { 
+    firstName, 
+    lastName, 
+    email: redactEmail(email), 
+    messageLength: message?.length || 0 
+  });
 
   // Validate input types and presence
   if (!firstName || typeof firstName !== 'string' || 
@@ -73,7 +85,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const isEmailValid = await validateEmail(sanitizedEmail);
   if (!isEmailValid) {
-    console.warn('❗ Invalid email address:', sanitizedEmail);
+    console.warn('❗ Invalid email address:', redactEmail(sanitizedEmail));
     return res.status(400).json({ message: 'Please enter a valid, working email address.' });
   }
 

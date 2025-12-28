@@ -103,13 +103,17 @@ export default function Success() {
   const shippingCost = firstOrder.shipping_cost || 0;
   const total = subtotal + tax + shippingCost;
 
-  const estimatedMinDate = firstOrder.shipping_estimated_days
-    ? new Date(Date.now() + firstOrder.shipping_estimated_days * 24 * 60 * 60 * 1000)
-    : null;
+  // Calculate dates only on client to prevent hydration mismatch
+  // Date.now() produces different values on server vs client
+  const [estimatedMinDate, setEstimatedMinDate] = useState<Date | null>(null);
+  const [estimatedMaxDate, setEstimatedMaxDate] = useState<Date | null>(null);
 
-  const estimatedMaxDate = firstOrder.shipping_estimated_days
-    ? new Date(Date.now() + (firstOrder.shipping_estimated_days + 2) * 24 * 60 * 60 * 1000)
-    : null;
+  useEffect(() => {
+    if (firstOrder?.shipping_estimated_days) {
+      setEstimatedMinDate(new Date(Date.now() + firstOrder.shipping_estimated_days * 24 * 60 * 60 * 1000));
+      setEstimatedMaxDate(new Date(Date.now() + (firstOrder.shipping_estimated_days + 2) * 24 * 60 * 60 * 1000));
+    }
+  }, [firstOrder?.shipping_estimated_days]);
 
   const isFreeDelivery =
     firstOrder.shipping_method === "Local Pickup" ||

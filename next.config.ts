@@ -1,7 +1,12 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  
+  // Set output file tracing root to silence lockfile warning
+  // Points to the sr-botanicals directory (where this config file is located)
+  outputFileTracingRoot: path.resolve(process.cwd()),
 
   // ✅ Let preview builds succeed while you fix lint/TS locally
   eslint: { ignoreDuringBuilds: true },
@@ -17,6 +22,8 @@ const nextConfig: NextConfig = {
         pathname: "/storage/v1/object/public/**",
       },
     ],
+    // Configure image qualities for Next.js 16 compatibility
+    qualities: [75, 100],
   },
 
   // 🔒 Security Headers

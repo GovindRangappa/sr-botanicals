@@ -126,8 +126,10 @@ export default function SalesAnalytics() {
         const recentOrders = salesData
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .flatMap(order =>
-            order.products.map(p => ({
+            order.products.map((p, index) => ({
               ...p,
+              order_id: order.id,
+              product_index: index,
               created_at: order.created_at,
               customer_email: order.customer_email,
               customer_name: `${order.first_name ?? ""} ${order.last_name ?? ""}`.trim() || "Unknown Customer",
@@ -239,9 +241,9 @@ export default function SalesAnalytics() {
         <h2 className="text-2xl text-center font-semibold mb-4">Recent Orders</h2>
         <div className="bg-white p-4 rounded shadow mb-10">
         <ul>
-            {recentOrders.map((order) => (
+            {recentOrders.map((order, index) => (
             <li
-                key={order.id}
+                key={`${order.order_id}-${order.product_index ?? index}-${order.name}`}
                 className="flex justify-between items-center py-2 border-b"
             >
                 <div>
