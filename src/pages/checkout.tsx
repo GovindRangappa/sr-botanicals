@@ -18,12 +18,9 @@ import Script from 'next/script';
 export default function CheckoutPage() {
   const { cart } = useCart();
   const router = useRouter();
+  const [cartLoaded, setCartLoaded] = useState(false);
 
-  const handleBackToShop = () => {
-    router.push('/shop');
-  };
-
-
+  // All useState hooks must be at the top - before any early returns
   const [shippingInfo, setShippingInfo] = useState({
     firstName: '',
     lastName: '',
@@ -133,6 +130,41 @@ export default function CheckoutPage() {
       }
     };
   }, [selectedRate]);
+
+  // Wait for cart to load from localStorage before checking
+  useEffect(() => {
+    // Cart is loaded from localStorage in CartContext, give it a moment
+    const timer = setTimeout(() => {
+      setCartLoaded(true);
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Redirect to shop if cart is empty (only after cart has loaded)
+  useEffect(() => {
+    if (cartLoaded && (!cart || cart.length === 0)) {
+      router.replace('/shop');
+    }
+  }, [cart, cartLoaded, router]);
+
+  // Show loading state while cart is being loaded
+  if (!cartLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f5f2e8]">
+        <p className="text-[#3c2f2f]">Loading...</p>
+      </div>
+    );
+  }
+
+  // Show nothing while redirecting if cart is empty
+  if (!cart || cart.length === 0) {
+    return null;
+  }
+
+  const handleBackToShop = () => {
+    router.push('/shop');
+  };
 
   const validateForm = async (skipAddressValidation = false) => {
     const newErrors: any = {};

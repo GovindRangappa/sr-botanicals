@@ -7,7 +7,7 @@ export async function getServerSideProps() {
 }
 
 
-import { useSearchParams } from "next/navigation";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useCart } from "@/context/CartContext";
@@ -19,17 +19,26 @@ const supabase = createClient(
 );
 
 export default function Success() {
-  const searchParams = useSearchParams();
-  const session_id = searchParams.get("session_id");
+  const router = useRouter();
+  const session_id = router.query.session_id as string | undefined;
 
+  // All useState hooks must be at the top - before any early returns
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [estimatedMinDate, setEstimatedMinDate] = useState<Date | null>(null);
+  const [estimatedMaxDate, setEstimatedMaxDate] = useState<Date | null>(null);
 
   const { clearCart } = useCart();
 
+  // Redirect if no session_id is provided
   useEffect(() => {
-    if (!session_id) return;
+    if (!session_id || !router.isReady) {
+      if (router.isReady && !session_id) {
+        router.replace('/shop');
+      }
+      return;
+    }
 
     async function fetchOrders() {
       console.log("🔄 Fetching orders and receipt for session:", session_id);
@@ -41,7 +50,16 @@ export default function Success() {
         .eq("stripe_checkout_id", session_id);
 
       if (!error && data && data.length > 0) {
-        setOrders(data);
+        // Verify that the order is actually paid
+        const paidOrders = data.filter(order => order.status === 'paid' || order.status === 'complete');
+        if (paidOrders.length === 0) {
+          // Order exists but is not paid - redirect to shop
+          console.warn('Order found but not paid, redirecting to shop');
+          router.replace('/shop');
+          setLoading(false);
+          return;
+        }
+        setOrders(paidOrders);
         clearCart();
 
         try {
@@ -77,8 +95,24 @@ export default function Success() {
     }
 
     fetchOrders();
-  }, [session_id]);
+  }, [session_id, router.isReady, router, clearCart]);
 
+  // Calculate dates only on client to prevent hydration mismatch
+  // Date.now() produces different values on server vs client
+  useEffect(() => {
+    if (orders.length > 0) {
+      const firstOrder = orders[0];
+      if (firstOrder?.shipping_estimated_days) {
+        setEstimatedMinDate(new Date(Date.now() + firstOrder.shipping_estimated_days * 24 * 60 * 60 * 1000));
+        setEstimatedMaxDate(new Date(Date.now() + (firstOrder.shipping_estimated_days + 2) * 24 * 60 * 60 * 1000));
+      }
+    }
+  }, [orders]);
+
+  // Show nothing while router is not ready or if no session_id
+  if (!router.isReady || !session_id) {
+    return null;
+  }
 
   if (loading) {
     return (
@@ -89,12 +123,9 @@ export default function Success() {
   }
 
   if (!orders || orders.length === 0) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f5f2ea] text-red-700 text-center font-['Playfair_Display']">
-        <h1 className="text-2xl font-bold">Order not found</h1>
-        <p className="mt-2 text-md">Please contact support if you think this is a mistake.</p>
-      </div>
-    );
+    // Redirect to shop if no paid orders found
+    router.replace('/shop');
+    return null;
   }
 
   const firstOrder = orders[0];
@@ -102,18 +133,6 @@ export default function Success() {
   const tax = firstOrder.tax || 0;
   const shippingCost = firstOrder.shipping_cost || 0;
   const total = subtotal + tax + shippingCost;
-
-  // Calculate dates only on client to prevent hydration mismatch
-  // Date.now() produces different values on server vs client
-  const [estimatedMinDate, setEstimatedMinDate] = useState<Date | null>(null);
-  const [estimatedMaxDate, setEstimatedMaxDate] = useState<Date | null>(null);
-
-  useEffect(() => {
-    if (firstOrder?.shipping_estimated_days) {
-      setEstimatedMinDate(new Date(Date.now() + firstOrder.shipping_estimated_days * 24 * 60 * 60 * 1000));
-      setEstimatedMaxDate(new Date(Date.now() + (firstOrder.shipping_estimated_days + 2) * 24 * 60 * 60 * 1000));
-    }
-  }, [firstOrder?.shipping_estimated_days]);
 
   const isFreeDelivery =
     firstOrder.shipping_method === "Local Pickup" ||
