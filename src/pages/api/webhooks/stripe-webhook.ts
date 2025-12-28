@@ -6,6 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Shippo } from 'shippo';
 import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmation";
 import { sendOwnerPickupNotificationEmail } from "@/lib/email/sendOwnerPickupNotification";
+import { sendOwnerHandDeliveryNotificationEmail } from "@/lib/email/sendOwnerHandDeliveryNotification";
 import { sendOwnerShippingNotificationEmail } from "@/lib/email/sendOwnerShippingNotification";
 import { sendShipmentConfirmationEmail } from "@/lib/email/sendShipmentConfirmation";
 
@@ -24,10 +25,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+// Helper function to check if shipping method is Hand Delivery
+function isHandDelivery(shippingMethod: string | null | undefined): boolean {
+  if (!shippingMethod) return false;
+  const normalized = shippingMethod.trim();
+  // Check for Hand Delivery (case-insensitive for safety)
+  return normalized === "Hand Delivery" || 
+         normalized.toLowerCase() === "hand delivery";
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   console.log('📩 Incoming Stripe webhook');
 
   if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
+  
+  // Get base URL for packing slip link (webhooks don't have origin, so use env var or default)
+  let baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!baseUrl) {
+    if (process.env.VERCEL_URL) {
+      baseUrl = `https://${process.env.VERCEL_URL}`;
+    } else {
+      baseUrl = 'https://sr-botanicals.vercel.app';
+    }
+  }
 
   const sig = req.headers['stripe-signature'];
   const buf = await buffer(req);
@@ -148,6 +168,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   }
                 }
 
+                // Check for Hand Delivery order
+                const isHandDeliveryOrder = orderToLabel ? isHandDelivery(orderToLabel.shipping_method) : false;
+                console.log("🔍 [Webhook] Checking Hand Delivery notification:", {
+                  shipping_method: orderToLabel?.shipping_method,
+                  owner_pickup_email_sent: orderToLabel?.owner_pickup_email_sent,
+                  orderId: orderId,
+                  isHandDelivery: isHandDeliveryOrder,
+                });
+
+                if (isHandDeliveryOrder && orderToLabel && !orderToLabel.owner_pickup_email_sent) {
+                  console.log("✅ [Webhook] Conditions met, sending Hand Delivery notification (payment_intent.succeeded)");
+                  try {
+                    await sendOwnerHandDeliveryNotificationEmail(orderToLabel);
+                    await supabase
+                      .from("orders")
+                      .update({ owner_pickup_email_sent: true })
+                      .eq("id", orderId);
+                    console.log("🚗 Owner Hand Delivery notification sent (payment_intent.succeeded)");
+                  } catch (err) {
+                    console.error("❌ Failed to send owner hand delivery notification:", err);
+                  }
+                } else {
+                  console.log("⏭️ [Webhook] Skipping Hand Delivery notification:", {
+                    reason: !isHandDeliveryOrder 
+                      ? "Not a Hand Delivery order" 
+                      : "Already sent (owner_pickup_email_sent is true)",
+                    shipping_method: orderToLabel?.shipping_method,
+                    owner_pickup_email_sent: orderToLabel?.owner_pickup_email_sent,
+                    isHandDelivery: isHandDeliveryOrder,
+                  });
+                }
+
                 if (
                   orderToLabel &&
                   orderToLabel.shipping_method !== "Local Pickup" &&
@@ -155,7 +207,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   !orderToLabel.owner_shipping_email_sent
                 ) {
                   try {
-                    await sendOwnerShippingNotificationEmail(orderToLabel);
+                    await sendOwnerShippingNotificationEmail(orderToLabel, baseUrl);
                     await supabase
                       .from("orders")
                       .update({ owner_shipping_email_sent: true })
@@ -363,6 +415,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               }
             }
 
+            // ✅ Owner notification for Hand Delivery (send only once)
+            const isHandDeliveryOrderInvoice = orderToLabel ? isHandDelivery(orderToLabel.shipping_method) : false;
+            console.log("🔍 [Webhook] Checking Hand Delivery notification (invoice.paid):", {
+              shipping_method: orderToLabel?.shipping_method,
+              owner_pickup_email_sent: orderToLabel?.owner_pickup_email_sent,
+              orderId: orderId,
+              isHandDelivery: isHandDeliveryOrderInvoice,
+            });
+
+            if (
+              orderToLabel &&
+              isHandDeliveryOrderInvoice &&
+              !orderToLabel.owner_pickup_email_sent
+            ) {
+              console.log("✅ [Webhook] Conditions met, sending Hand Delivery notification (invoice.paid)");
+              try {
+                await sendOwnerHandDeliveryNotificationEmail(orderToLabel);
+
+                await supabase
+                  .from("orders")
+                  .update({ owner_pickup_email_sent: true })
+                  .eq("id", orderId);
+
+                console.log("🚗 Owner Hand Delivery notification sent (invoice.paid)");
+              } catch (err) {
+                console.error("❌ Failed to send owner hand delivery notification (invoice.paid):", err);
+              }
+            } else {
+              console.log("⏭️ [Webhook] Skipping Hand Delivery notification (invoice.paid):", {
+                reason: !orderToLabel 
+                  ? "No order found" 
+                  : !isHandDeliveryOrderInvoice 
+                    ? "Not a Hand Delivery order" 
+                    : "Already sent (owner_pickup_email_sent is true)",
+                shipping_method: orderToLabel?.shipping_method,
+                owner_pickup_email_sent: orderToLabel?.owner_pickup_email_sent,
+                isHandDelivery: isHandDeliveryOrderInvoice,
+              });
+            }
+
             // ✅ Owner notification for Paid Shipping (send only once)
             if (
               orderToLabel &&
@@ -371,7 +463,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               !orderToLabel.owner_shipping_email_sent
             ) {
               try {
-                await sendOwnerShippingNotificationEmail(orderToLabel);
+                await sendOwnerShippingNotificationEmail(orderToLabel, baseUrl);
 
                 await supabase
                   .from("orders")
@@ -636,6 +728,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         }
 
+        // ✅ Owner notification for Hand Delivery (send only once)
+        const isHandDeliveryOrderSession = orderForLabel ? isHandDelivery(orderForLabel.shipping_method) : false;
+        console.log("🔍 [Webhook] Checking Hand Delivery notification (checkout.session.completed):", {
+          shipping_method: orderForLabel?.shipping_method,
+          owner_pickup_email_sent: orderForLabel?.owner_pickup_email_sent,
+          orderId: orderForLabel?.id,
+          isHandDelivery: isHandDeliveryOrderSession,
+        });
+
+        if (
+          isHandDeliveryOrderSession &&
+          orderForLabel &&
+          !orderForLabel.owner_pickup_email_sent
+        ) {
+          console.log("✅ [Webhook] Conditions met, sending Hand Delivery notification (checkout.session.completed)");
+          try {
+            await sendOwnerHandDeliveryNotificationEmail(orderForLabel);
+
+            await supabase
+              .from("orders")
+              .update({ owner_pickup_email_sent: true })
+              .eq("id", orderForLabel.id);
+
+            console.log("🚗 Owner Hand Delivery notification sent");
+          } catch (err) {
+            console.error("❌ Failed to send owner hand delivery notification:", err);
+          }
+        } else {
+          console.log("⏭️ [Webhook] Skipping Hand Delivery notification (checkout.session.completed):", {
+            reason: !isHandDeliveryOrderSession 
+              ? "Not a Hand Delivery order" 
+              : "Already sent (owner_pickup_email_sent is true)",
+            shipping_method: orderForLabel?.shipping_method,
+            owner_pickup_email_sent: orderForLabel?.owner_pickup_email_sent,
+            isHandDelivery: isHandDeliveryOrderSession,
+          });
+        }
+
         // ✅ Owner notification for shipping orders (send only once)
         if (
           orderForLabel.shipping_method !== "Local Pickup" &&
@@ -643,7 +773,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           !orderForLabel.owner_shipping_email_sent
         ) {
           try {
-            await sendOwnerShippingNotificationEmail(orderForLabel);
+            await sendOwnerShippingNotificationEmail(orderForLabel, baseUrl);
 
             await supabase
               .from("orders")

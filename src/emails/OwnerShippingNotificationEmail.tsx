@@ -9,6 +9,7 @@ import {
   Section,
   Row,
   Column,
+  Link,
 } from "@react-email/components";
 
 type Product = {
@@ -21,16 +22,30 @@ type Props = {
   orderId: string | number;
   customerName: string;
   customerEmail: string;
+  customerPhone?: string | null;
   products: Product[];
   shippingMethod: string;
+  shippingAddress?: {
+    name?: string | null;
+    street1?: string | null;
+    city?: string | null;
+    state?: string | null;
+    zip?: string | null;
+  };
+  labelUrl?: string | null;
+  packingSlipUrl?: string | null;
 };
 
 export default function OwnerShippingNotificationEmail({
   orderId,
   customerName,
   customerEmail,
+  customerPhone,
   products,
   shippingMethod,
+  shippingAddress,
+  labelUrl,
+  packingSlipUrl,
 }: Props) {
   return (
     <Html>
@@ -50,9 +65,40 @@ export default function OwnerShippingNotificationEmail({
             <br />
             <strong>Customer:</strong> {customerName}
             <br />
-            <strong>Email:</strong> {customerEmail}
-            <br />
             <strong>Shipping Method:</strong> {shippingMethod}
+          </Text>
+
+          <Hr style={styles.hr} />
+
+          {shippingAddress && (shippingAddress.street1 || shippingAddress.city || shippingAddress.state || shippingAddress.zip) && (
+            <>
+              <Heading as="h3" style={styles.subheading}>
+                Shipping Address
+              </Heading>
+              <Text style={styles.text}>
+                {shippingAddress.name && <>{shippingAddress.name}<br /></>}
+                {shippingAddress.street1 && <>{shippingAddress.street1}<br /></>}
+                {shippingAddress.city && shippingAddress.state && shippingAddress.zip && (
+                  <>
+                    {shippingAddress.city}, {shippingAddress.state} {shippingAddress.zip}
+                  </>
+                )}
+              </Text>
+              <Hr style={styles.hr} />
+            </>
+          )}
+
+          <Heading as="h3" style={styles.subheading}>
+            Contact Information
+          </Heading>
+          <Text style={styles.text}>
+            <strong>Email:</strong> {customerEmail}
+            {customerPhone && (
+              <>
+                <br />
+                <strong>Phone:</strong> {customerPhone}
+              </>
+            )}
           </Text>
 
           <Hr style={styles.hr} />
@@ -79,6 +125,32 @@ export default function OwnerShippingNotificationEmail({
           </Section>
 
           <Hr style={styles.hr} />
+
+          {(labelUrl || packingSlipUrl) && (
+            <>
+              <Heading as="h3" style={styles.subheading}>
+                Shipping Documents
+              </Heading>
+              <Text style={styles.text}>
+                {labelUrl && (
+                  <>
+                    <Link href={labelUrl} style={styles.link} target="_blank">
+                      Download Shipping Label
+                    </Link>
+                    <br />
+                  </>
+                )}
+                {packingSlipUrl && (
+                  <>
+                    <Link href={packingSlipUrl} style={styles.link} target="_blank">
+                      Download Packing Slip
+                    </Link>
+                  </>
+                )}
+              </Text>
+              <Hr style={styles.hr} />
+            </>
+          )}
 
           <Text style={styles.footer}>
             Action required: Please pack and ship this order.
@@ -132,5 +204,9 @@ const styles = {
     fontSize: "13px",
     color: "#6b5e5e",
     marginTop: "24px",
+  },
+  link: {
+    color: "#2f5d50",
+    textDecoration: "underline",
   },
 };

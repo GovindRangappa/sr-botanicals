@@ -361,6 +361,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             customer_email: formData.email,
             first_name: formData.firstName,
             last_name: formData.lastName,
+            phone: formData.phone || null,
             products,
             subtotal,
             tax,
@@ -499,6 +500,12 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
             const notificationResult = await notificationRes.json();
             if (notificationRes.ok) {
                 console.log('✅ Notifications sent for manual order:', notificationResult);
+                
+                // Log owner shipping email debug info to browser console
+                if (notificationResult.debug?.ownerShippingDebug) {
+                    console.log('🔍 [OWNER SHIPPING EMAIL DEBUG]', notificationResult.debug.ownerShippingDebug);
+                    console.log('📊 Decision:', notificationResult.debug.ownerShippingDebug.decision);
+                }
             } else {
                 console.error('❌ Failed to send notifications:', notificationResult);
             }
