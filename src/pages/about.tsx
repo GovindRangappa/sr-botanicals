@@ -42,7 +42,7 @@ export default function About() {
 
         {/* Dark Content Sections */}
         <div className="text-white">
-          <div className="max-w-4xl mx-auto pt-0 pb-16 px-6 space-y-16">
+          <div className="max-w-4xl mx-auto pt-0 pb-16 px-4 sm:px-6 space-y-8 sm:space-y-16">
             
             {/* About Suman Section */}
             <motion.section
@@ -57,7 +57,7 @@ export default function About() {
                 className="w-full text-left"
               >
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-3xl sm:text-4xl font-bold font-['Playfair_Display']">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold font-['Playfair_Display']">
                     About Suman
                   </h2>
                   <span className="text-2xl text-gray-400">
@@ -75,16 +75,16 @@ export default function About() {
                     className="overflow-hidden"
                   >
                     <hr className="border-gray-600 mb-6" />
-                    <div className="relative min-h-[200px]">
-                      <p className="text-lg leading-relaxed pr-60 pb-4">
+                    <div className="flex flex-col md:flex-row gap-6 items-start">
+                      <p className="text-base sm:text-lg leading-relaxed flex-1">
                         Suman Rangappa, DMD, is the founder of <strong>SR Botanicals</strong>. An avid gardener, passionate formulator, and practicing general dentist, she brings hands-on experience with herbs, deep research, and a love for nature. She approaches skin and hair care with a strong understanding of the body, balance, and long-term health. Her products reflect her belief that what is put on the body should be thoughtful and nourishing, gentle, naturally derived, and made with intention.
                       </p>
-                      <div className="absolute bottom-0 right-0 w-56 h-56 rounded-lg overflow-hidden border-2 border-gray-600">
+                      <div className="relative w-full sm:w-48 md:w-56 aspect-square rounded-lg overflow-hidden border-2 border-gray-600 flex-shrink-0 mx-auto md:mx-0">
                         <Image
                           src="/suman-nature.jpg"
                           alt="Suman in nature"
                           fill
-                          className="object-cover"
+                          className="object-cover object-center"
                         />
                       </div>
                     </div>
@@ -106,7 +106,7 @@ export default function About() {
                 className="w-full text-left"
               >
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-3xl sm:text-4xl font-bold font-['Playfair_Display']">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold font-['Playfair_Display']">
                     Mission Statement
                   </h2>
                   <span className="text-2xl text-gray-400">
@@ -124,7 +124,7 @@ export default function About() {
                     className="overflow-hidden"
                   >
                     <hr className="border-gray-600 mb-6" />
-                    <p className="text-lg leading-relaxed">
+                    <p className="text-base sm:text-lg leading-relaxed">
                       To create naturally derived skin and hair care products that are gentle, effective, and rooted in both botanical wisdom and scientific understanding—supporting health, balance, and natural beauty.
                     </p>
                   </motion.div>
@@ -145,7 +145,7 @@ export default function About() {
                 className="w-full text-left"
               >
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-3xl sm:text-4xl font-bold font-['Playfair_Display']">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold font-['Playfair_Display']">
                     Vision
                   </h2>
                   <span className="text-2xl text-gray-400">
@@ -163,7 +163,7 @@ export default function About() {
                     className="overflow-hidden"
                   >
                     <hr className="border-gray-600 mb-6" />
-                    <p className="text-lg leading-relaxed">
+                    <p className="text-base sm:text-lg leading-relaxed">
                       To redefine self-care as intentional and wellness-focused, where people choose meaningful, sustainable products that nurture the body and respect nature—without compromise.
                     </p>
                   </motion.div>
@@ -184,7 +184,7 @@ export default function About() {
                 className="w-full text-left"
               >
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-3xl sm:text-4xl font-bold font-['Playfair_Display']">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold font-['Playfair_Display']">
                     Our Values
                   </h2>
                   <span className="text-2xl text-gray-400">
@@ -201,61 +201,61 @@ export default function About() {
                     transition={{ duration: 0.3 }}
                     className="overflow-hidden"
                   >
-                    <hr className="border-gray-600 mb-8" />
-                    <div className="grid md:grid-cols-2 gap-8 items-stretch">
-                      <div className="space-y-8">
+                    <hr className="border-gray-600 mb-6 sm:mb-8" />
+                    <div className="grid md:grid-cols-2 gap-6 sm:gap-8 items-stretch">
+                      <div className="space-y-6 sm:space-y-8">
                         <div>
-                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                          <h3 className="text-lg sm:text-xl font-bold font-['Playfair_Display'] mb-2">
                             Nature-First Formulation
                           </h3>
-                          <p className="text-lg leading-relaxed">
+                          <p className="text-base sm:text-lg leading-relaxed">
                             We believe in using nature's gifts responsibly—formulating with naturally derived ingredients and avoiding unnecessary or harmful additives.
                           </p>
                         </div>
 
                         <div>
-                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                          <h3 className="text-lg sm:text-xl font-bold font-['Playfair_Display'] mb-2">
                             Health & Balance
                           </h3>
-                          <p className="text-lg leading-relaxed">
+                          <p className="text-base sm:text-lg leading-relaxed">
                             Our products are designed to be gentle on the skin and hair, without disrupting hormones or the body's natural equilibrium.
                           </p>
                         </div>
 
                         <div>
-                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                          <h3 className="text-lg sm:text-xl font-bold font-['Playfair_Display'] mb-2">
                             Research & Integrity
                           </h3>
-                          <p className="text-lg leading-relaxed">
+                          <p className="text-base sm:text-lg leading-relaxed">
                             Every formulation is thoughtfully researched and created with care, transparency, and purpose.
                           </p>
                         </div>
 
                         <div>
-                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                          <h3 className="text-lg sm:text-xl font-bold font-['Playfair_Display'] mb-2">
                             Sustainability & Responsibility
                           </h3>
-                          <p className="text-lg leading-relaxed">
+                          <p className="text-base sm:text-lg leading-relaxed">
                             We prioritize ethical sourcing and mindful creation to minimize environmental impact.
                           </p>
                         </div>
 
                         <div>
-                          <h3 className="text-xl font-bold font-['Playfair_Display'] mb-2">
+                          <h3 className="text-lg sm:text-xl font-bold font-['Playfair_Display'] mb-2">
                             Intentional Living
                           </h3>
-                          <p className="text-lg leading-relaxed">
+                          <p className="text-base sm:text-lg leading-relaxed">
                             We encourage replacing throwaway, unwanted gifts with products that promote wellness, longevity, and care.
                           </p>
                         </div>
                       </div>
-                      <div className="w-full max-w-md mx-auto md:mx-0 md:ml-auto h-full">
-                        <div className="relative w-full h-full rounded-lg overflow-hidden border-2 border-gray-600">
+                      <div className="w-full max-w-md mx-auto md:mx-0 md:ml-auto">
+                        <div className="relative w-full aspect-[3/4] sm:aspect-[2/3] md:h-full md:aspect-auto rounded-lg overflow-hidden border-2 border-gray-600">
                           <Image
                             src="/aboutpage-pic.png"
                             alt="Stacked handmade soaps"
                             fill
-                            className="object-cover"
+                            className="object-cover object-center"
                           />
                         </div>
                       </div>
@@ -278,7 +278,7 @@ export default function About() {
                 className="w-full text-left"
               >
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-3xl sm:text-4xl font-bold font-['Playfair_Display']">
+                  <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold font-['Playfair_Display']">
                     Why SR Botanicals
                   </h2>
                   <span className="text-2xl text-gray-400">
@@ -296,7 +296,7 @@ export default function About() {
                     className="overflow-hidden"
                   >
                     <hr className="border-gray-600 mb-6" />
-                    <p className="text-lg leading-relaxed">
+                    <p className="text-base sm:text-lg leading-relaxed">
                       SR Botanicals was born from the belief that personal care should be both effective and meaningful. Each product is handmade with intention, inspired by years of gardening, herbal knowledge, and a deep appreciation for natural beauty. These are products meant to be used, valued, and gifted with purpose—not forgotten or discarded.
                     </p>
                   </motion.div>
@@ -317,7 +317,7 @@ export default function About() {
                 className="w-full text-left"
               >
                 <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl sm:text-3xl font-bold font-['Playfair_Display']">
+                  <h2 className="text-xl sm:text-2xl md:text-3xl font-bold font-['Playfair_Display']">
                     A Personal Note
                   </h2>
                   <span className="text-2xl text-gray-400">
@@ -334,8 +334,8 @@ export default function About() {
                     transition={{ duration: 0.3 }}
                     className="overflow-hidden"
                   >
-                    <hr className="border-gray-600 mb-8" />
-                    <p className="text-lg leading-relaxed">
+                    <hr className="border-gray-600 mb-6 sm:mb-8" />
+                    <p className="text-base sm:text-lg leading-relaxed">
                       SR Botanicals is more than a business—it's a reflection of a lifelong respect for nature, health, and mindful living. Every product is created with the same care we would give our own family.
                     </p>
                   </motion.div>
