@@ -19,8 +19,8 @@ export default function Collection() {
           Our Collection
         </h2>
 
-        {/* Mobile: horizontal scroll */}
-        <div className="flex gap-6 overflow-x-auto sm:hidden px-2 snap-x snap-mandatory scroll-smooth">
+        {/* Mobile & Tablet: horizontal scroll */}
+        <div className="flex gap-6 overflow-x-auto xl:hidden px-2 snap-x snap-mandatory scroll-smooth">
           {items.map((item, idx) => (
             <Link key={idx} href={`/shop#${item.category}`} passHref>
               <div className="min-w-[250px] snap-start shrink-0 bg-white hover:bg-[#f8f5ee] rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 flex flex-col items-center py-4 px-2">
@@ -40,8 +40,8 @@ export default function Collection() {
           ))}
         </div>
 
-        {/* Desktop & Tablet: 2, 4, or 5-column grid */}
-        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-5 gap-x-8 gap-y-10 max-w-[1700px] mx-auto px-4">
+        {/* Desktop: 5-column grid */}
+        <div className="hidden xl:grid xl:grid-cols-5 gap-x-8 gap-y-10 max-w-[1700px] mx-auto px-4">
           {items.map((item, idx) => (
             <Link key={idx} href={`/shop#${item.category}`} passHref>
               <div className="group cursor-pointer bg-white hover:bg-[#f8f5ee] rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 flex flex-col items-center w-full max-w-sm mx-auto py-4 px-2">
