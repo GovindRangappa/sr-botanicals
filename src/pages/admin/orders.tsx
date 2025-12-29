@@ -1,7 +1,7 @@
 'use client';
 
 import AdminLayout from '@/components/AdminLayout';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import ManualOrderForm from '@/components/ManualOrderForm';
@@ -18,6 +18,8 @@ export default function AdminOrdersPage() {
   const [showManualOrderModal, setShowManualOrderModal] = useState(false);
   const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
   const router = useRouter();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const stickyScrollbarRef = useRef<HTMLDivElement>(null);
 
   const allowedEmails = ['ivygovind@gmail.com', 'srbotanicals@gmail.com'];
 
@@ -48,6 +50,147 @@ export default function AdminOrdersPage() {
 
     checkAccessAndFetchOrders();
   }, [router]);
+
+  // Sync sticky scrollbar with main scroll container
+  useEffect(() => {
+    const mainContainer = scrollContainerRef.current;
+    const stickyScrollbar = stickyScrollbarRef.current;
+
+    if (!mainContainer || !stickyScrollbar) return;
+
+    // Sync scroll widths so they match
+    const syncScrollWidths = () => {
+      // Get the actual scrollable width from the inner div that contains the table
+      const innerDiv = mainContainer.querySelector('div') as HTMLElement;
+      // Use scrollWidth which includes all scrollable content
+      const mainScrollWidth = innerDiv ? innerDiv.scrollWidth : mainContainer.scrollWidth;
+      const mainClientWidth = mainContainer.clientWidth;
+      const mainMaxScroll = mainScrollWidth - mainClientWidth;
+      
+      const stickyInnerDiv = stickyScrollbar.querySelector('div') as HTMLElement;
+      const stickyClientWidth = stickyScrollbar.clientWidth;
+      
+      // The key issue: we need to ensure the sticky scrollbar's scrollable range matches
+      // Calculate the width needed so that stickyScrollbar.scrollWidth - stickyScrollbar.clientWidth = mainMaxScroll
+      // If stickyClientWidth is the current clientWidth of the sticky scrollbar,
+      // we need: stickyScrollWidth - stickyClientWidth = mainMaxScroll
+      // So: stickyScrollWidth = mainMaxScroll + stickyClientWidth
+      const targetStickyScrollWidth = mainMaxScroll + stickyClientWidth;
+      
+      console.log('📊 [Scroll Sync] Width calculation:', {
+        mainContainer: {
+          scrollWidth: mainContainer.scrollWidth,
+          clientWidth: mainContainer.clientWidth,
+          scrollLeft: mainContainer.scrollLeft,
+          maxScrollLeft: mainContainer.scrollWidth - mainContainer.clientWidth,
+        },
+        innerDiv: {
+          scrollWidth: innerDiv?.scrollWidth,
+          clientWidth: innerDiv?.clientWidth,
+        },
+        mainScrollWidth,
+        mainClientWidth,
+        mainMaxScroll,
+        stickyScrollbar: {
+          scrollWidth: stickyScrollbar.scrollWidth,
+          clientWidth: stickyScrollbar.clientWidth,
+          scrollLeft: stickyScrollbar.scrollLeft,
+          maxScrollLeft: stickyScrollbar.scrollWidth - stickyScrollbar.clientWidth,
+        },
+        stickyInnerDiv: {
+          currentWidth: stickyInnerDiv?.style.width,
+          currentMinWidth: stickyInnerDiv?.style.minWidth,
+        },
+        targetStickyScrollWidth,
+        calculation: `targetWidth = ${mainMaxScroll} + ${stickyClientWidth} = ${targetStickyScrollWidth}`,
+      });
+      
+      if (stickyInnerDiv && mainScrollWidth > 0) {
+        // Set width so that max scroll positions match
+        // We want: stickyScrollbar.scrollWidth - stickyScrollbar.clientWidth = mainContainer.scrollWidth - mainContainer.clientWidth
+        // So: stickyInnerDiv.width = mainMaxScroll + stickyScrollbar.clientWidth
+        stickyInnerDiv.style.width = `${targetStickyScrollWidth}px`;
+        stickyInnerDiv.style.minWidth = `${targetStickyScrollWidth}px`;
+        stickyInnerDiv.style.maxWidth = `${targetStickyScrollWidth}px`;
+        
+        console.log('✅ [Scroll Sync] Updated sticky scrollbar width to:', targetStickyScrollWidth);
+        
+        // Log after a brief delay to see the updated values
+        setTimeout(() => {
+          const stickyMaxScrollAfter = stickyScrollbar.scrollWidth - stickyScrollbar.clientWidth;
+          const mainMaxScrollAfter = mainContainer.scrollWidth - mainContainer.clientWidth;
+          console.log('📊 [Scroll Sync] After update:', {
+            stickyScrollbarScrollWidth: stickyScrollbar.scrollWidth,
+            stickyScrollbarClientWidth: stickyScrollbar.clientWidth,
+            stickyScrollbarMaxScrollLeft: stickyMaxScrollAfter,
+            mainContainerMaxScrollLeft: mainMaxScrollAfter,
+            match: Math.abs(stickyMaxScrollAfter - mainMaxScrollAfter) < 1, // Allow 1px tolerance
+          });
+        }, 50);
+      }
+    };
+
+    // Initial sync with multiple attempts to ensure DOM is ready
+    syncScrollWidths();
+    requestAnimationFrame(() => {
+      syncScrollWidths();
+      setTimeout(syncScrollWidths, 100);
+      setTimeout(syncScrollWidths, 500);
+    });
+
+    const handleScroll = () => {
+      if (stickyScrollbar) {
+        const mainScrollLeft = mainContainer.scrollLeft;
+        const mainMaxScroll = mainContainer.scrollWidth - mainContainer.clientWidth;
+        stickyScrollbar.scrollLeft = mainScrollLeft;
+        console.log('🔄 [Scroll] Main container scrolled:', {
+          scrollLeft: mainScrollLeft,
+          maxScroll: mainMaxScroll,
+          atMax: mainScrollLeft >= mainMaxScroll - 1,
+          stickyScrollLeft: stickyScrollbar.scrollLeft,
+        });
+      }
+    };
+
+    const handleStickyScroll = () => {
+      if (mainContainer) {
+        const stickyScrollLeft = stickyScrollbar.scrollLeft;
+        const stickyMaxScroll = stickyScrollbar.scrollWidth - stickyScrollbar.clientWidth;
+        const mainMaxScroll = mainContainer.scrollWidth - mainContainer.clientWidth;
+        mainContainer.scrollLeft = stickyScrollLeft;
+        console.log('🔄 [Scroll] Sticky scrollbar scrolled:', {
+          stickyScrollLeft,
+          stickyMaxScroll,
+          stickyAtMax: stickyScrollLeft >= stickyMaxScroll - 1,
+          mainScrollLeft: mainContainer.scrollLeft,
+          mainMaxScroll,
+          mainAtMax: mainContainer.scrollLeft >= mainMaxScroll - 1,
+          widthsMatch: stickyMaxScroll === mainMaxScroll,
+        });
+      }
+    };
+
+    mainContainer.addEventListener('scroll', handleScroll);
+    stickyScrollbar.addEventListener('scroll', handleStickyScroll);
+
+    // Watch for resize to keep widths in sync
+    const resizeObserver = new ResizeObserver(() => {
+      syncScrollWidths();
+    });
+    resizeObserver.observe(mainContainer);
+    
+    // Also observe the inner div that contains the table
+    const innerDiv = mainContainer.querySelector('div') as HTMLElement;
+    if (innerDiv) {
+      resizeObserver.observe(innerDiv);
+    }
+
+    return () => {
+      mainContainer.removeEventListener('scroll', handleScroll);
+      stickyScrollbar.removeEventListener('scroll', handleStickyScroll);
+      resizeObserver.disconnect();
+    };
+  }, [orders]);
 
   const handleViewSlip = async (orderId: string) => {
     try {
@@ -114,7 +257,7 @@ export default function AdminOrdersPage() {
 
   return (
     <AdminLayout>
-      <div className="min-h-screen bg-[#f5f2ea] text-[#184c43] p-2 sm:p-4 lg:p-8 font-['Playfair_Display']">
+      <div className="min-h-screen bg-[#f5f2ea] text-[#184c43] p-2 sm:p-4 lg:p-8 font-['Playfair_Display'] pb-20">
         <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6 text-center">Order History</h1>
 
         <div className="mb-4 sm:mb-6 text-center">
@@ -131,7 +274,21 @@ export default function AdminOrdersPage() {
         ) : orders.length === 0 ? (
           <p className="text-center text-red-600">No orders found.</p>
         ) : (
-          <div className="w-full overflow-x-auto">
+          <div className="relative pb-6">
+            <div 
+              ref={scrollContainerRef}
+              className="w-full orders-table-scroll-container"
+              onWheel={(e) => {
+              // Enable horizontal scrolling with Shift + Mouse Wheel or trackpad horizontal scroll
+              if (e.shiftKey && e.deltaY !== 0) {
+                e.preventDefault();
+                e.currentTarget.scrollLeft += e.deltaY;
+              } else if (e.deltaX !== 0) {
+                // Handle trackpad horizontal scrolling
+                e.currentTarget.scrollLeft += e.deltaX;
+              }
+            }}
+          >
             <div className="min-w-[1400px]">
               <table className="w-full text-xs sm:text-sm text-left border border-[#dcd6c4] table-fixed">
                 <thead className="bg-[#e8e3d5]">
@@ -291,6 +448,14 @@ export default function AdminOrdersPage() {
                   })}
                 </tbody>
               </table>
+              </div>
+            </div>
+            {/* Fixed scrollbar that's always visible at bottom of viewport */}
+            <div 
+              ref={stickyScrollbarRef}
+              className="fixed bottom-0 h-4 bg-[#f5f2ea] sticky-scrollbar z-50 md:left-[10rem] left-0 right-0"
+            >
+              <div style={{ minWidth: '1400px', height: '100%' }}></div>
             </div>
           </div>
         )}

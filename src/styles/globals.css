@@ -47,3 +47,41 @@ video {
   height: auto;
   display: block;
 }
+
+/* Custom scrollbar for admin orders table */
+/* Hide scrollbar on main container, but keep scrolling functionality */
+.orders-table-scroll-container:not(.sticky-scrollbar) {
+  overflow-x: scroll !important;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.orders-table-scroll-container:not(.sticky-scrollbar)::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Opera */
+}
+
+/* Sticky scrollbar - always visible */
+.sticky-scrollbar {
+  overflow-x: scroll !important;
+  scrollbar-width: thin;
+  scrollbar-color: #dcd6c4 #f5f2ea;
+}
+
+.sticky-scrollbar::-webkit-scrollbar {
+  height: 14px !important;
+  display: block !important;
+}
+
+.sticky-scrollbar::-webkit-scrollbar-track {
+  background: #f5f2ea !important;
+}
+
+.sticky-scrollbar::-webkit-scrollbar-thumb {
+  background: #dcd6c4 !important;
+  border-radius: 7px !important;
+  border: 2px solid #f5f2ea;
+}
+
+.sticky-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #c2bfaf !important;
+}
