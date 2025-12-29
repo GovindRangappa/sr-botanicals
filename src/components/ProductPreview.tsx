@@ -4,9 +4,9 @@ import Link from 'next/link';
 import FadeInOnScroll from '@/components/FadeInOnScroll';
 
 const products = [
-  { name: "Silky Lock Elixir (8oz)", slug: "silky-lock-elixir", price: "$12", image: "/SilkyLockElixir.png" },
+  { name: "Silky Lock Elixir", slug: "silky-lock-elixir", price: "$12", image: "/SilkyLockElixir.png" },
   { name: "Wild Rose", slug: "wild-rose", price: "$4.99", image: "/WildRose.png" },
-  { name: "Evergreen Forest", slug: "evergreen-forest", price: "$4.99", image: "/EvergreenForest.png" },
+  { name: "Nourish Lock Pomade", slug: "nourish-lock-pomade", price: "$10.00", image: "/NourishLockPomade.png" },
 ];
 
 export default function ProductPreview() {

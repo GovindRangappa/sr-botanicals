@@ -4,7 +4,7 @@ import FadeInOnScroll from '@/components/FadeInOnScroll';
 import Image from 'next/image';
 
 export default function HomeImage() {
-  const bannerSrc = "/homepage-banner-new.png";
+  const bannerSrc = "/HomePageBannerFadedLogo-2.png";
   console.log("HomeImage: Loading banner image from:", bannerSrc);
   
   return (
