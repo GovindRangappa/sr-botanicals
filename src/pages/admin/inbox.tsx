@@ -128,47 +128,48 @@ export default function InboxAdminPage() {
 
   return (
     <AdminLayout>
-    <section className="p-8">
-      <h2 className="text-3xl font-bold mb-6">Inbox</h2>
+    <section className="p-4 md:p-8">
+      <h2 className="text-2xl md:text-3xl font-bold mb-4 md:mb-6">Inbox</h2>
       <div className="space-y-4">
         {messages.map((msg) => (
-          <div key={msg.id} className="border rounded shadow p-4">
-            <div className="flex justify-between items-center">
-              <div>
-                <div className="font-bold">{msg.first_name} {msg.last_name} ({msg.email})</div>
-                <div className="text-gray-600 text-sm">{new Date(msg.created_at).toLocaleString()}</div>
-                <div className="mt-2">{msg.message}</div>
-                <div className="text-xs text-gray-500 mt-1">Type: {msg.type} | Sender: {msg.sender}</div>
+          <div key={msg.id} className="border rounded shadow p-3 md:p-4">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-0">
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-sm md:text-base break-words">{msg.first_name} {msg.last_name} <span className="text-gray-600">({msg.email})</span></div>
+                <div className="text-gray-600 text-xs md:text-sm mt-1">{new Date(msg.created_at).toLocaleString()}</div>
+                <div className="mt-2 text-sm md:text-base break-words">{msg.message}</div>
+                <div className="text-xs text-gray-500 mt-1 break-words">Type: {msg.type} | Sender: {msg.sender}</div>
               </div>
               <button
                 onClick={() => handleToggle(msg.customer_id)}
-                className="text-sm bg-green-700 text-white px-3 py-1 rounded hover:bg-green-800"
+                className="text-xs md:text-sm bg-green-700 text-white px-3 py-2 rounded hover:bg-green-800 whitespace-nowrap self-start md:self-auto"
               >
                 {openCustomerId === msg.customer_id ? "Close" : "View Conversation"}
               </button>
             </div>
 
             {openCustomerId === msg.customer_id && (
-              <div className="mt-4 border-t pt-2 space-y-2">
+              <div className="mt-4 border-t pt-4 space-y-2">
                 {fullMessages[msg.customer_id]?.map((fm) => (
-                  <div key={fm.id} className="bg-gray-100 p-2 rounded">
-                    <div className="text-sm">
-                      <strong>{fm.sender.toUpperCase()}</strong> — {new Date(fm.created_at).toLocaleString()}
+                  <div key={fm.id} className="bg-gray-100 p-2 md:p-3 rounded">
+                    <div className="text-xs md:text-sm break-words">
+                      <strong>{fm.sender.toUpperCase()}</strong> — <span className="text-gray-600">{new Date(fm.created_at).toLocaleString()}</span>
                     </div>
-                    <div>{fm.message}</div>
+                    <div className="mt-1 text-sm md:text-base break-words">{fm.message}</div>
                   </div>
                 ))}
-                <div className="mt-2">
+                <div className="mt-3">
                   <textarea
                     value={replyMessage}
                     onChange={(e) => setReplyMessage(e.target.value)}
                     placeholder="Type your reply..."
-                    className="w-full border rounded p-2 mb-2"
+                    className="w-full border rounded p-2 mb-2 text-sm md:text-base min-h-[100px]"
+                    rows={4}
                   />
                   <button
                     onClick={() => handleSendReply(msg.customer_id)}
                     disabled={isReplying}
-                    className="bg-green-700 text-white px-4 py-2 rounded hover:bg-green-800"
+                    className="w-full md:w-auto bg-green-700 text-white px-4 py-2 rounded hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
                   >
                     {isReplying ? 'Sending...' : 'Send Reply'}
                   </button>
