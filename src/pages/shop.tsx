@@ -66,6 +66,33 @@ export default function Shop() {
     const updatePosition = () => {
       if (!sidebarRef.current || !parentContainer || !mainContent) return;
 
+      // Check if sidebar is visible (it's hidden on mobile with 'hidden md:block')
+      // Sidebar should only be visible at md breakpoint (768px) and above
+      const windowWidth = window.innerWidth;
+      const isSidebarVisible = windowWidth >= 768; // md breakpoint
+      
+      // If sidebar is not visible on mobile, reset all styles and exit early
+      if (!isSidebarVisible) {
+        sidebar.style.position = '';
+        sidebar.style.top = '';
+        sidebar.style.left = '';
+        sidebar.style.width = '';
+        sidebar.style.backgroundColor = '';
+        sidebar.style.zIndex = '';
+        sidebar.style.paddingRight = '';
+        sidebar.style.height = '';
+        sidebar.style.maxHeight = '';
+        sidebar.style.boxShadow = '';
+        sidebar.style.marginLeft = '';
+        sidebar.style.marginTop = '';
+        (mainContent as HTMLElement).style.marginLeft = '';
+        (mainContent as HTMLElement).style.paddingLeft = '';
+        // Reset initial values so they recalculate if window is resized back above md
+        initialOffsetTop = 0;
+        initialLeft = 0;
+        return;
+      }
+
       const scrollY = window.scrollY || window.pageYOffset;
       const parentRect = parentContainer.getBoundingClientRect();
       
@@ -80,8 +107,7 @@ export default function Shop() {
       // Only capture position when sidebar is in normal flow (not already fixed)
       // This ensures we get the accurate position before it becomes sticky
       const isCurrentlyFixed = sidebar.style.position === 'fixed';
-      const currentWindowWidth = window.innerWidth;
-      const hasWindowResized = currentWindowWidth !== lastWindowWidth;
+      const hasWindowResized = windowWidth !== lastWindowWidth;
       
       if (!isCurrentlyFixed) {
         const sidebarRect = sidebar.getBoundingClientRect();
@@ -93,7 +119,7 @@ export default function Shop() {
           const previousInitialLeft = initialLeft;
           initialLeft = sidebarRect.left;
           sidebarWidth = sidebar.offsetWidth || sidebarRect.width;
-          lastWindowWidth = currentWindowWidth;
+          lastWindowWidth = windowWidth;
           
           console.log("=== Sidebar Position Captured ===");
           console.log("Previous initialLeft:", previousInitialLeft);
@@ -102,12 +128,15 @@ export default function Shop() {
           console.log("Sidebar offsetWidth:", sidebar.offsetWidth);
           console.log("SidebarWidth:", sidebarWidth);
           console.log("Parent offsetTop:", initialOffsetTop);
-          console.log("Window width:", currentWindowWidth);
+          console.log("Window width:", windowWidth);
           console.log("Was resized:", hasWindowResized);
         }
       }
       
-      if (shouldStick && parentRect.top <= navbarHeight) {
+      // Make sidebar sticky when conditions are met (at all visible widths >= 768px)
+      const shouldBeSticky = shouldStick && parentRect.top <= navbarHeight;
+      
+      if (shouldBeSticky) {
         const sidebarRectBefore = sidebar.getBoundingClientRect();
         
         // Get computed margin to account for it when positioning fixed element
@@ -148,16 +177,19 @@ export default function Shop() {
         sidebar.style.maxHeight = `calc(100vh - ${navbarHeight + 16}px)`;
         sidebar.style.boxShadow = '2px 0 4px rgba(0,0,0,0.1)'; // Add subtle shadow for depth
         
+        // Calculate total sidebar space (width + padding + margins)
+        // Sidebar has: width (160px) + padding-right (24px) + margin-left (16px) = total space
+        const totalSidebarSpace = sidebarWidth + 24 + 16; // width + padding-right + margin-left
+        
         // Handle spacing based on screen width
-        const windowWidth = window.innerWidth;
         if (windowWidth >= 1280) {
-          // On large screens, use margin-left to reserve space for fixed sidebar
-          (mainContent as HTMLElement).style.marginLeft = `${sidebarWidth + 24 + 16}px`;
+          // On large screens (1280px+), use margin-left to reserve space
+          (mainContent as HTMLElement).style.marginLeft = `${totalSidebarSpace}px`;
           (mainContent as HTMLElement).style.paddingLeft = '';
         } else {
-          // Below 1280px, use padding-left instead of margin to prevent container shrinking
-          // Padding doesn't affect the container's total width calculation
-          (mainContent as HTMLElement).style.paddingLeft = `${sidebarWidth + 24 + 16}px`;
+          // Below 1280px, use padding-left to maintain space without affecting flex container width
+          // This prevents cards from moving by maintaining the exact space the sidebar occupied
+          (mainContent as HTMLElement).style.paddingLeft = `${totalSidebarSpace}px`;
           (mainContent as HTMLElement).style.marginLeft = '';
         }
       } else {
