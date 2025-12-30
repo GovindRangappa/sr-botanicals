@@ -61,6 +61,7 @@ export default function Shop() {
     let initialOffsetTop = 0;
     let initialLeft = 0;
     let sidebarWidth = 0;
+    let lastWindowWidth = window.innerWidth;
 
     const updatePosition = () => {
       if (!sidebarRef.current || !parentContainer || !mainContent) return;
@@ -68,13 +69,6 @@ export default function Shop() {
       const scrollY = window.scrollY || window.pageYOffset;
       const parentRect = parentContainer.getBoundingClientRect();
       
-      // Calculate the initial position on first run
-      if (initialOffsetTop === 0) {
-        initialOffsetTop = parentContainer.offsetTop;
-        initialLeft = parentRect.left;
-        sidebarWidth = sidebar.offsetWidth;
-      }
-
       // Get the navbar height
       const navbar = document.querySelector('nav');
       const navbarHeight = navbar ? navbar.getBoundingClientRect().height : 0;
@@ -83,23 +77,121 @@ export default function Shop() {
       // Sidebar should stick when the parent container's top reaches the navbar
       const shouldStick = scrollY >= initialOffsetTop - navbarHeight;
       
+      // Only capture position when sidebar is in normal flow (not already fixed)
+      // This ensures we get the accurate position before it becomes sticky
+      const isCurrentlyFixed = sidebar.style.position === 'fixed';
+      const currentWindowWidth = window.innerWidth;
+      const hasWindowResized = currentWindowWidth !== lastWindowWidth;
+      
+      if (!isCurrentlyFixed) {
+        const sidebarRect = sidebar.getBoundingClientRect();
+        // Capture or update position only when:
+        // 1. First time (initialOffsetTop === 0)
+        // 2. Window has been resized
+        if (initialOffsetTop === 0 || hasWindowResized) {
+          initialOffsetTop = parentContainer.offsetTop;
+          const previousInitialLeft = initialLeft;
+          initialLeft = sidebarRect.left;
+          sidebarWidth = sidebar.offsetWidth || sidebarRect.width;
+          lastWindowWidth = currentWindowWidth;
+          
+          console.log("=== Sidebar Position Captured ===");
+          console.log("Previous initialLeft:", previousInitialLeft);
+          console.log("New initialLeft:", initialLeft);
+          console.log("Sidebar rect.left:", sidebarRect.left);
+          console.log("Sidebar offsetWidth:", sidebar.offsetWidth);
+          console.log("SidebarWidth:", sidebarWidth);
+          console.log("Parent offsetTop:", initialOffsetTop);
+          console.log("Window width:", currentWindowWidth);
+          console.log("Was resized:", hasWindowResized);
+        }
+      }
+      
       if (shouldStick && parentRect.top <= navbarHeight) {
+        const sidebarRectBefore = sidebar.getBoundingClientRect();
+        
+        // Get computed margin to account for it when positioning fixed element
+        const computedStyle = window.getComputedStyle(sidebar);
+        const marginLeft = parseFloat(computedStyle.marginLeft) || 0;
+        
         // Sidebar should be sticky - use fixed positioning
         sidebar.style.position = 'fixed';
         sidebar.style.top = `${navbarHeight + 16}px`; // Add 16px (1rem) spacing from top
-        sidebar.style.left = `${initialLeft + 16}px`; // Add 16px (1rem) spacing from left
+        // Remove margin when fixed and adjust left position to account for removed margin
+        sidebar.style.marginLeft = '0';
+        sidebar.style.marginTop = '0';
+        // Use the captured initial left position (which includes margin) minus the margin
+        const adjustedLeft = initialLeft - marginLeft;
+        sidebar.style.left = `${adjustedLeft}px`;
+        
+        // Log after setting styles to see actual position
+        setTimeout(() => {
+          const sidebarRectAfter = sidebar.getBoundingClientRect();
+          console.log("=== Sidebar Became Sticky ===");
+          console.log("Should stick:", shouldStick);
+          console.log("Parent top:", parentRect.top);
+          console.log("Navbar height:", navbarHeight);
+          console.log("InitialLeft (captured):", initialLeft);
+          console.log("MarginLeft:", marginLeft);
+          console.log("Adjusted left (initialLeft - marginLeft):", adjustedLeft);
+          console.log("Set left to:", `${adjustedLeft}px`);
+          console.log("Actual sidebar.left (before):", sidebarRectBefore.left);
+          console.log("Actual sidebar.left (after):", sidebarRectAfter.left);
+          console.log("Difference:", sidebarRectAfter.left - adjustedLeft);
+        }, 0);
         sidebar.style.width = `${sidebarWidth}px`;
-        // Add margin-left to main content to reserve space for fixed sidebar
-        // sidebarWidth (160px) + pr-6 (24px padding) + left margin (16px) = 200px total
-        (mainContent as HTMLElement).style.marginLeft = `${sidebarWidth + 24 + 16}px`;
+        // Add background color and z-index when sticky to prevent transparency and ensure it's above content
+        sidebar.style.backgroundColor = '#f5f2e8';
+        sidebar.style.zIndex = '20';
+        sidebar.style.paddingRight = '1.5rem'; // pr-6 equivalent
+        sidebar.style.height = 'auto';
+        sidebar.style.maxHeight = `calc(100vh - ${navbarHeight + 16}px)`;
+        sidebar.style.boxShadow = '2px 0 4px rgba(0,0,0,0.1)'; // Add subtle shadow for depth
+        
+        // Handle spacing based on screen width
+        const windowWidth = window.innerWidth;
+        if (windowWidth >= 1280) {
+          // On large screens, use margin-left to reserve space for fixed sidebar
+          (mainContent as HTMLElement).style.marginLeft = `${sidebarWidth + 24 + 16}px`;
+          (mainContent as HTMLElement).style.paddingLeft = '';
+        } else {
+          // Below 1280px, use padding-left instead of margin to prevent container shrinking
+          // Padding doesn't affect the container's total width calculation
+          (mainContent as HTMLElement).style.paddingLeft = `${sidebarWidth + 24 + 16}px`;
+          (mainContent as HTMLElement).style.marginLeft = '';
+        }
       } else {
         // Sidebar should be in normal flow
+        if (isCurrentlyFixed) {
+          const sidebarRectBefore = sidebar.getBoundingClientRect();
+          console.log("=== Sidebar Returning to Normal Flow ===");
+          console.log("Was at left:", sidebarRectBefore.left);
+          console.log("InitialLeft value:", initialLeft);
+        }
+        
         sidebar.style.position = '';
         sidebar.style.top = '';
         sidebar.style.left = '';
         sidebar.style.width = '';
-        // Remove the margin when sidebar is in normal flow
+        sidebar.style.backgroundColor = '';
+        sidebar.style.zIndex = '';
+        sidebar.style.paddingRight = '';
+        sidebar.style.height = '';
+        sidebar.style.maxHeight = '';
+        sidebar.style.boxShadow = '';
+        // Restore margins when returning to normal flow (they're defined in inline styles)
+        sidebar.style.marginLeft = '';
+        sidebar.style.marginTop = '';
+        // Remove the margin and padding when sidebar is in normal flow
         (mainContent as HTMLElement).style.marginLeft = '';
+        (mainContent as HTMLElement).style.paddingLeft = '';
+        
+        if (isCurrentlyFixed) {
+          setTimeout(() => {
+            const sidebarRectAfter = sidebar.getBoundingClientRect();
+            console.log("Sidebar left after returning to normal:", sidebarRectAfter.left);
+          }, 0);
+        }
       }
     };
 
