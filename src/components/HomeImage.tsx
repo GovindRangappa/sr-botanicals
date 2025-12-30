@@ -7,7 +7,7 @@ import Image from 'next/image';
 
 export default function HomeImage() {
   const mobileBannerSrc = "/HomePageBanner-Mobile.png";
-  const desktopBannerSrc = "/HomePageBannerFadedLogo-2.png";
+  const desktopBannerSrc = "/HomePageBannerFadedLogo.png";
   const mobileContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
