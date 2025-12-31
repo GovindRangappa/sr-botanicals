@@ -15,7 +15,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!isAdmin) return; // Response already sent by requireAdmin
 
   const { customerId, message } = req.body;
-  if (!customerId || typeof customerId !== 'number' || !message || typeof message !== 'string') {
+  
+  // Validate customerId is a non-empty string (UUID)
+  if (!customerId || typeof customerId !== 'string' || customerId.trim().length === 0 || !message || typeof message !== 'string') {
+    console.error('Invalid request body:', { customerId, customerIdType: typeof customerId, messageType: typeof message, messageLength: message?.length });
     return res.status(400).json({ error: 'Missing or invalid fields' });
   }
 

@@ -107,20 +107,35 @@ export default function InboxAdminPage() {
     if (!replyMessage.trim()) return;
     setIsReplying(true);
     try {
+      // Validate UUID format (basic check)
+      if (!customerId || typeof customerId !== 'string' || customerId.trim().length === 0) {
+        console.error('Invalid customerId:', customerId);
+        alert('Invalid customer ID. Please refresh the page and try again.');
+        return;
+      }
+
+      const requestBody = { customerId: customerId, message: replyMessage };
+      console.log('Sending reply with:', { customerId, messageLength: replyMessage.length });
+
       const headers = await getAuthHeaders();
       const res = await fetch('/api/messages/reply', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ customerId, message: replyMessage }),
+        body: JSON.stringify(requestBody),
       });
+      
+      const result = await res.json();
+      
       if (res.ok) {
         setReplyMessage('');
         await fetchFullConversation(customerId);
       } else {
-        console.error('Error sending reply');
+        console.error('Error sending reply:', result.error || 'Unknown error');
+        alert(`Failed to send reply: ${result.error || 'Unknown error'}`);
       }
     } catch (err) {
       console.error('Reply error:', err);
+      alert('An error occurred while sending the reply. Please try again.');
     } finally {
       setIsReplying(false);
     }
