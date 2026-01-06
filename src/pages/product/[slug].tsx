@@ -42,6 +42,7 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
 export default function ProductPage({ product, variants }: { product: any; variants: any[] }) {
   const { cart, addToCart, updateQuantity, removeFromCart } = useCart();
   const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState<string>('1');
   const [selectedVariant, setSelectedVariant] = useState<any>(null);
 
   // ✅ Track the cart item for the currently selected variant
@@ -50,8 +51,13 @@ export default function ProductPage({ product, variants }: { product: any; varia
 
   // ✅ Keep quantity in sync with cart when present
   useEffect(() => {
-    if (cartItem?.quantity) setQuantity(cartItem.quantity);
-    else setQuantity(1);
+    if (cartItem?.quantity) {
+      setQuantity(cartItem.quantity);
+      setQuantityInput(cartItem.quantity.toString());
+    } else {
+      setQuantity(1);
+      setQuantityInput('1');
+    }
   }, [currentId, cartItem?.quantity]);
 
   useEffect(() => {
@@ -164,11 +170,37 @@ export default function ProductPage({ product, variants }: { product: any; varia
                 <input
                   type="number"
                   min={1}
-                  value={cartItem ? cartItem.quantity : quantity}
+                  value={quantityInput}
                   onChange={(e) => {
-                    const val = Math.max(1, parseInt(e.target.value) || 1);
-                    if (cartItem) updateQuantity(currentId!, val); // updates drawer too
-                    else setQuantity(val);                         // local before adding
+                    const inputValue = e.target.value;
+                    // Allow empty input during editing
+                    setQuantityInput(inputValue);
+                    
+                    // Only update quantity if we have a valid number
+                    if (inputValue !== '') {
+                      const numValue = parseInt(inputValue);
+                      if (!isNaN(numValue) && numValue >= 1) {
+                        const val = Math.max(1, numValue);
+                        if (cartItem) {
+                          updateQuantity(currentId!, val);
+                        } else {
+                          setQuantity(val);
+                        }
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    // Validate and set minimum on blur
+                    const inputValue = e.target.value;
+                    const numValue = parseInt(inputValue) || 1;
+                    const val = Math.max(1, numValue);
+                    
+                    setQuantityInput(val.toString());
+                    if (cartItem) {
+                      updateQuantity(currentId!, val);
+                    } else {
+                      setQuantity(val);
+                    }
                   }}
                   className="w-24 border rounded px-2 py-1"
                 />
