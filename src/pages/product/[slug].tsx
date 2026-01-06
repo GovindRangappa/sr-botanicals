@@ -36,7 +36,12 @@ export const getStaticProps: GetStaticProps = async ({ params }) => {
     .select('*')
     .eq('product_id', product.id);
 
-  return { props: { product, variants } };
+  // Revalidate the page every 60 seconds (ISR - Incremental Static Regeneration)
+  // This ensures product updates appear on the live site within 60 seconds
+  return { 
+    props: { product, variants },
+    revalidate: 60 // Regenerate page at most once every 60 seconds
+  };
 };
 
 export default function ProductPage({ product, variants }: { product: any; variants: any[] }) {
