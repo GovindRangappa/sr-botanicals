@@ -17,6 +17,7 @@ export default function AdminOrdersPage() {
   const [authorized, setAuthorized] = useState(false);
   const [showManualOrderModal, setShowManualOrderModal] = useState(false);
   const [invoiceLoadingId, setInvoiceLoadingId] = useState<string | null>(null);
+  const [labelCreatingId, setLabelCreatingId] = useState<string | null>(null);
   const router = useRouter();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const stickyScrollbarRef = useRef<HTMLDivElement>(null);
@@ -247,6 +248,62 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const handleCreateLabel = async (orderId: string) => {
+    if (!confirm('Create shipping label for this order? The ship date will be set to today.')) {
+      return;
+    }
+
+    try {
+      setLabelCreatingId(orderId);
+      
+      // Get auth headers with Bearer token
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
+      const res = await fetch('/api/create-shipping-label', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ orderId }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create label');
+      }
+
+      // Update the order in the local state
+      setOrders(prev =>
+        prev.map(order =>
+          order.id === orderId
+            ? {
+                ...order,
+                label_url: data.labelUrl,
+                tracking_number: data.trackingNumber,
+                ship_date: data.shipDate,
+              }
+            : order
+        )
+      );
+
+      alert('Shipping label created successfully!');
+      // Open the label in a new tab
+      if (data.labelUrl) {
+        window.open(data.labelUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (err: any) {
+      console.error('Failed to create label:', err);
+      alert(err.message || 'Could not create the shipping label. Please try again later.');
+    } finally {
+      setLabelCreatingId(null);
+    }
+  };
+
   if (!authorized) {
     return (
       <div className="min-h-screen flex items-center justify-center text-[#184c43] bg-[#f5f2ea] font-['Playfair_Display']">
@@ -413,6 +470,19 @@ export default function AdminOrdersPage() {
                                       View <br />
                                       Label
                                     </a>
+                                  ) : order.status === 'paid' ? (
+                                    <button
+                                      onClick={() => handleCreateLabel(order.id)}
+                                      disabled={labelCreatingId === order.id}
+                                      className="bg-green-600 text-white px-1 sm:px-2 py-1 rounded text-xs hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed inline-block"
+                                    >
+                                      {labelCreatingId === order.id ? 'Creating...' : (
+                                        <>
+                                          Create <br />
+                                          Label
+                                        </>
+                                      )}
+                                    </button>
                                   ) : '—'}
                                 </td>
                               </>

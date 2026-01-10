@@ -41,6 +41,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
   const autocompleteRef = useRef<HTMLInputElement | null>(null);
   const [subtotal, setSubtotal] = useState(0);
   const [shippingCost, setShippingCost] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
 
 
@@ -302,90 +303,98 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
 
 
   const handleSubmit = async () => {
-    console.log('📦 Selected Shipping Type:', formData.shippingType);
-    console.log('📦 Selected Shipping Rate ID:', formData.shippingRateId);
-    console.log('📦 All Available Rates:', rates);
+    // Prevent double submission
+    if (isSubmitting) {
+      console.log('⏭️ Already submitting, ignoring duplicate click');
+      return;
+    }
 
-    const subtotal = selectedProducts.reduce((sum, p) => sum + p.price * p.quantity, 0);
-    const tax = subtotal * 0.0825;
-    const shippingCost =
-        formData.shippingType === 'paid'
-        ? Number(rates.find(r => r.id === formData.shippingRateId)?.amount || 0)
-        : 0;
+    try {
+      setIsSubmitting(true);
+      console.log('📦 Selected Shipping Type:', formData.shippingType);
+      console.log('📦 Selected Shipping Rate ID:', formData.shippingRateId);
+      console.log('📦 All Available Rates:', rates);
 
-    console.log('✅ Calculated Shipping Cost:', shippingCost);
+      const subtotal = selectedProducts.reduce((sum, p) => sum + p.price * p.quantity, 0);
+      const tax = subtotal * 0.0825;
+      const shippingCost =
+          formData.shippingType === 'paid'
+          ? Number(rates.find(r => r.id === formData.shippingRateId)?.amount || 0)
+          : 0;
 
-    const products = selectedProducts.map(p => ({
-        name: p.name,
-        size: p.size ?? null,
-        quantity: p.quantity,
-        price: p.price,
-    }));
+      console.log('✅ Calculated Shipping Cost:', shippingCost);
+
+      const products = selectedProducts.map(p => ({
+          name: p.name,
+          size: p.size ?? null,
+          quantity: p.quantity,
+          price: p.price,
+      }));
 
 
-    const selectedRate = rates.find(r => r.id === formData.shippingRateId);
+      const selectedRate = rates.find(r => r.id === formData.shippingRateId);
 
-    // Normalize shipping method to match expected database format
-    let normalizedShippingMethod: string;
-    if (selectedRate) {
-      // For paid shipping, use the rate provider and servicelevel
-      normalizedShippingMethod = `${selectedRate.provider} ${selectedRate.servicelevel?.name || selectedRate.servicelevel}`;
-      console.log('📦 Using selected rate for shipping method:', normalizedShippingMethod);
-    } else {
-      // For free delivery options, normalize the shipping type
-      const shippingTypeLower = formData.shippingType.toLowerCase().trim();
-      console.log('📦 Normalizing shipping type:', { 
-        original: formData.shippingType, 
-        lowercased: shippingTypeLower 
-      });
-      if (shippingTypeLower === 'local pickup') {
-        normalizedShippingMethod = 'Local Pickup';
-      } else if (shippingTypeLower === 'hand delivery') {
-        normalizedShippingMethod = 'Hand Delivery';
+      // Normalize shipping method to match expected database format
+      let normalizedShippingMethod: string;
+      if (selectedRate) {
+        // For paid shipping, use the rate provider and servicelevel
+        normalizedShippingMethod = `${selectedRate.provider} ${selectedRate.servicelevel?.name || selectedRate.servicelevel}`;
+        console.log('📦 Using selected rate for shipping method:', normalizedShippingMethod);
       } else {
-        normalizedShippingMethod = formData.shippingMethod || formData.shippingType || 'Standard';
+        // For free delivery options, normalize the shipping type
+        const shippingTypeLower = formData.shippingType.toLowerCase().trim();
+        console.log('📦 Normalizing shipping type:', { 
+          original: formData.shippingType, 
+          lowercased: shippingTypeLower 
+        });
+        if (shippingTypeLower === 'local pickup') {
+          normalizedShippingMethod = 'Local Pickup';
+        } else if (shippingTypeLower === 'hand delivery') {
+          normalizedShippingMethod = 'Hand Delivery';
+        } else {
+          normalizedShippingMethod = formData.shippingMethod || formData.shippingType || 'Standard';
+        }
+        console.log('📦 Normalized to:', normalizedShippingMethod);
       }
-      console.log('📦 Normalized to:', normalizedShippingMethod);
-    }
 
-    console.log('📤 Final shipping_method being saved:', normalizedShippingMethod);
+      console.log('📤 Final shipping_method being saved:', normalizedShippingMethod);
 
-    // Cash payments are always paid immediately
-    const isCashPayment = formData.paymentMethod === 'cash';
-    const orderStatus = (formData.paid || isCashPayment) ? 'paid' : 'unpaid';
+      // Cash payments are always paid immediately
+      const isCashPayment = formData.paymentMethod === 'cash';
+      const orderStatus = (formData.paid || isCashPayment) ? 'paid' : 'unpaid';
 
-    const { data, error } = await supabase
-        .from('orders')
-        .insert([
-        {
-            customer_email: formData.email,
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            phone: formData.phone || null,
-            products,
-            subtotal,
-            tax,
-            shipping_cost: shippingCost,
-            shipment_id: formData.shipmentId ?? null, // ✅ added
-            shipping_method: normalizedShippingMethod,
-            shipping_name: `${formData.firstName} ${formData.lastName}`,
-            shipping_street1: formData.street,
-            shipping_city: formData.city,
-            shipping_state: formData.state,
-            shipping_zip: formData.zip,
-            status: orderStatus,
-            fulfillment_status: formData.fulfilled ? 'fulfilled' : 'unfulfilled',
-            payment_method: formData.paymentMethod,
-        },
-        ])
-        .select()
-        .single();
+      const { data, error } = await supabase
+          .from('orders')
+          .insert([
+          {
+              customer_email: formData.email,
+              first_name: formData.firstName,
+              last_name: formData.lastName,
+              phone: formData.phone || null,
+              products,
+              subtotal,
+              tax,
+              shipping_cost: shippingCost,
+              shipment_id: formData.shipmentId ?? null, // ✅ added
+              shipping_method: normalizedShippingMethod,
+              shipping_name: `${formData.firstName} ${formData.lastName}`,
+              shipping_street1: formData.street,
+              shipping_city: formData.city,
+              shipping_state: formData.state,
+              shipping_zip: formData.zip,
+              status: orderStatus,
+              fulfillment_status: formData.fulfilled ? 'fulfilled' : 'unfulfilled',
+              payment_method: formData.paymentMethod,
+          },
+          ])
+          .select()
+          .single();
 
-    if (error) {
-        alert('❌ Failed to submit order');
-        console.error(error);
-        return;
-    }
+      if (error) {
+          alert('❌ Failed to submit order');
+          console.error(error);
+          return;
+      }
 
     try {
         const { data: existingCustomer, error: customerLookupError } = await supabase
@@ -515,8 +524,11 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
         }
     }
 
-    onClose();
-    }; 
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }; 
 
   const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -788,7 +800,7 @@ export default function ManualOrderForm({ onClose }: { onClose: () => void }) {
 
         <div className="text-center mt-6">
           <button
-            disabled={!isFormValid}
+            disabled={!isFormValid || isSubmitting}
             onClick={handleSubmit}
             className={`bg-[#2f5d50] text-white px-4 py-2 rounded hover:bg-[#24493f] w-full ${
                 !isFormValid ? 'opacity-50 cursor-not-allowed' : ''

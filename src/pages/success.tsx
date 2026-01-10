@@ -40,8 +40,11 @@ export default function Success() {
       return;
     }
 
+    // Guard: only run once per session_id
+    let isMounted = true;
+
     async function fetchOrders() {
-      console.log("🔄 Fetching orders and receipt for session:", session_id);
+      console.log("🔄 [SUCCESS PAGE] Fetching orders and receipt for session:", session_id);
 
       const { data, error } = await supabase
         .schema("public")
@@ -49,18 +52,25 @@ export default function Success() {
         .select("*")
         .eq("stripe_checkout_id", session_id);
 
+      if (!isMounted) return; // Prevent state updates if component unmounted
+
       if (!error && data && data.length > 0) {
         // Verify that the order is actually paid
         const paidOrders = data.filter(order => order.status === 'paid' || order.status === 'complete');
         if (paidOrders.length === 0) {
           // Order exists but is not paid - redirect to shop
           console.warn('Order found but not paid, redirecting to shop');
-          router.replace('/shop');
-          setLoading(false);
+          if (isMounted) {
+            router.replace('/shop');
+            setLoading(false);
+          }
           return;
         }
-        setOrders(paidOrders);
-        clearCart();
+        
+        if (isMounted) {
+          setOrders(paidOrders);
+          clearCart();
+        }
 
         try {
           // Pass customer email for session ownership validation
@@ -75,27 +85,38 @@ export default function Success() {
             }),
           });
 
+          if (!isMounted) return;
+
           const stripeData = await stripeRes.json();
-          console.log("🧾 Stripe response from API:", stripeData);
 
           if (stripeData.receipt_url) {
-            setReceiptUrl(stripeData.receipt_url);
-            console.log("✅ Receipt URL saved:", stripeData.receipt_url);
+            if (isMounted) {
+              setReceiptUrl(stripeData.receipt_url);
+              console.log("✅ [SUCCESS PAGE] Receipt URL received");
+            }
           } else {
-            console.warn("⚠️ No receipt URL found in Stripe response.");
+            console.warn("⚠️ [SUCCESS PAGE] No receipt URL in response");
           }
         } catch (err) {
           console.error("❌ Error while fetching Stripe receipt:", err);
         }
       } else {
-        console.error("❌ Error fetching orders from Supabase:", error);
+        if (error) {
+          console.error("❌ Error fetching orders from Supabase:", error);
+        }
       }
 
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+      }
     }
 
     fetchOrders();
-  }, [session_id, router.isReady, router, clearCart]);
+
+    return () => {
+      isMounted = false; // Cleanup: prevent state updates after unmount
+    };
+  }, [session_id, router.isReady]); // Removed router and clearCart from dependencies
 
   // Calculate dates only on client to prevent hydration mismatch
   // Date.now() produces different values on server vs client

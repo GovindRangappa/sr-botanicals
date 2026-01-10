@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@supabase/supabase-js';
-import { Shippo } from 'shippo';
 import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmation";
 import { sendOwnerPickupNotificationEmail } from "@/lib/email/sendOwnerPickupNotification";
 import { sendOwnerHandDeliveryNotificationEmail } from "@/lib/email/sendOwnerHandDeliveryNotification";
@@ -161,195 +160,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.log("⏭️ [Manual Order] Skipping Hand Delivery notification - not a Hand Delivery order");
     }
 
-    // 📦 Create shipping label FIRST, then send owner shipping notification email with label URL
-    console.log("🔍 [Manual Order] Checking shipment label creation conditions:", {
-      shipment_id: order.shipment_id,
-      isLocalPickup: isLocalPickupOrder,
-      isHandDelivery: isHandDeliveryOrder,
-      status: order.status,
-      allConditionsMet: !!(order.shipment_id && !isLocalPickupOrder && !isHandDeliveryOrder && order.status === 'paid'),
-    });
-
+    // ✅ Owner notification for Paid Shipping (send only once, without label)
+    // 📦 Label creation is now manual - done via admin "Create Label" button
+    // This allows owner to create labels when ready to ship, not when payment is received
     if (
-      order.shipment_id &&
       !isLocalPickupOrder &&
       !isHandDeliveryOrder &&
-      order.status === 'paid'
+      !order.owner_shipping_email_sent
     ) {
       try {
-        const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
-
-        console.log('🚚 Creating shipping label for manual order:', {
-          orderId: orderId,
-          shipment_id: order.shipment_id,
-          shipping_method: order.shipping_method,
-        });
-
-        // Fetch the shipment from Shippo
-        const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${order.shipment_id}`, {
-          headers: {
-            Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        const shipment = await shipmentRes.json();
-
-        if (!shipment.rates || shipment.rates.length === 0) {
-          console.error("❌ No rates found in shipment for manual order");
-        } else {
-          console.log('📦 Available rates:', shipment.rates);
-          console.log('🔍 Trying to match shipping_method:', order.shipping_method);
-
-          const availableLabels = shipment.rates.map((r: any) => `${r.provider} ${r.servicelevel?.name || r.servicelevel}`);
-          console.log('📬 Rate options available for matching:', availableLabels);
-
-          // Find the matching rate
-          const rate = shipment.rates.find((r: any) =>
-            `${r.provider} ${r.servicelevel?.name || r.servicelevel}` === order.shipping_method
-          );
-
-          if (!rate) {
-            console.error("❌ Rate matching manual order not found");
-            console.error("Available rates:", availableLabels);
-            console.error("Looking for:", order.shipping_method);
-            // If no matching rate, send owner email without label URL
-            if (!order.owner_shipping_email_sent) {
-              try {
-                await sendOwnerShippingNotificationEmail(order, baseUrl);
-                await supabase
-                  .from("orders")
-                  .update({ owner_shipping_email_sent: true })
-                  .eq("id", orderId);
-                results.ownerShippingEmail = true;
-                console.log("✔ Owner shipping notification sent (no matching rate, no label URL)");
-              } catch (err: any) {
-                console.error("❌ Failed to send owner shipping notification:", err);
-                results.ownerShippingEmail = false;
-              }
-            }
-          } else {
-            console.log("✅ Matched rate:", rate);
-            
-            // Create the shipping label
-            const transaction = await shippo.transactions.create({
-              rate: rate.object_id,
-              labelFileType: "PDF",
-              async: false,
-            });
-
-            if (transaction.status === "SUCCESS") {
-              const { trackingNumber, labelUrl } = transaction;
-
-              // Update order with tracking info
-              const { error: labelUpdateError } = await supabase
-                .from('orders')
-                .update({
-                  tracking_number: trackingNumber,
-                  label_url: labelUrl,
-                })
-                .eq('id', orderId);
-
-              if (labelUpdateError) {
-                console.error("❗ Failed to update manual order with label:", labelUpdateError);
-              } else {
-                console.log("✅ Shipping label created & saved for manual order");
-                
-                // Update local order object with label URL for email sending
-                order.label_url = labelUrl;
-                order.tracking_number = trackingNumber;
-
-                // ✅ NOW send owner shipping notification email (with label URL)
-                // Only send if not already sent
-                if (!order.owner_shipping_email_sent) {
-                  try {
-                    await sendOwnerShippingNotificationEmail(order, baseUrl);
-                    await supabase
-                      .from("orders")
-                      .update({ owner_shipping_email_sent: true })
-                      .eq("id", orderId);
-                    results.ownerShippingEmail = true;
-                    console.log("✔ Owner shipping notification sent (with label URL)");
-                  } catch (err: any) {
-                    console.error("❌ Failed to send owner shipping notification:", err);
-                    results.ownerShippingEmail = false;
-                  }
-                } else {
-                  console.log("ℹ️ Owner shipping notification already sent");
-                }
-              }
-
-              // Send customer shipment confirmation email (once)
-              if (!order.shipment_email_sent) {
-                try {
-                  await sendShipmentConfirmationEmail({
-                    ...order,
-                    tracking_number: trackingNumber,
-                    customer_first_name: order.first_name || order.customer_first_name,
-                  });
-
-                  await supabase
-                    .from("orders")
-                    .update({ shipment_email_sent: true })
-                    .eq("id", orderId);
-
-                  results.shipmentEmail = true;
-                  console.log("✓ Shipment confirmation email sent (manual order)");
-                } catch (err) {
-                  console.error("❌ Failed to send shipment confirmation email (manual order):", err);
-                }
-              } else {
-                console.log("ℹ️ Shipment confirmation email already sent");
-              }
-            } else {
-              console.error("❌ Shippo label creation failed for manual order:", transaction.messages);
-              // If label creation failed, still send owner email without label URL
-              if (!order.owner_shipping_email_sent) {
-                try {
-                  await sendOwnerShippingNotificationEmail(order, baseUrl);
-                  await supabase
-                    .from("orders")
-                    .update({ owner_shipping_email_sent: true })
-                    .eq("id", orderId);
-                  results.ownerShippingEmail = true;
-                  console.log("✔ Owner shipping notification sent (label creation failed, no label URL)");
-                } catch (err: any) {
-                  console.error("❌ Failed to send owner shipping notification:", err);
-                  results.ownerShippingEmail = false;
-                }
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.error("🚨 Error during label creation for manual order:", err);
-        // Don't fail the entire request if label creation fails
+        await sendOwnerShippingNotificationEmail(order, baseUrl);
+        await supabase
+          .from("orders")
+          .update({ owner_shipping_email_sent: true })
+          .eq("id", orderId);
+        results.ownerShippingEmail = true;
+        console.log("✔ Owner shipping notification sent (manual order - label will be created manually)");
+      } catch (err: any) {
+        console.error("❌ Failed to send owner shipping notification:", err);
+        results.ownerShippingEmail = false;
       }
-    } else {
-      if (!order.shipment_id) {
-        console.log("⏭️ [Manual Order] Skipping label creation - no shipment_id");
-        // If no shipment_id, we can't create a label, so send owner email without label URL
-        if (!isLocalPickupOrder && !isHandDeliveryOrder && !order.owner_shipping_email_sent) {
-          try {
-            await sendOwnerShippingNotificationEmail(order, baseUrl);
-            await supabase
-              .from("orders")
-              .update({ owner_shipping_email_sent: true })
-              .eq("id", orderId);
-            results.ownerShippingEmail = true;
-            console.log("✔ Owner shipping notification sent (no shipment_id, no label URL)");
-          } catch (err: any) {
-            console.error("❌ Failed to send owner shipping notification:", err);
-            results.ownerShippingEmail = false;
-          }
-        }
-      } else if (isLocalPickupOrder) {
-        console.log("⏭️ [Manual Order] Skipping label creation - Local Pickup order");
-      } else if (isHandDeliveryOrder) {
-        console.log("⏭️ [Manual Order] Skipping label creation - Hand Delivery order");
-      } else if (order.status !== 'paid') {
-        console.log("⏭️ [Manual Order] Skipping label creation - order not paid yet (status:", order.status, ")");
-      }
+    } else if (isLocalPickupOrder || isHandDeliveryOrder) {
+      console.log("⏭️ [Manual Order] Skipping owner shipping notification - Local Pickup or Hand Delivery order");
+    } else if (order.owner_shipping_email_sent) {
+      console.log("ℹ️ Owner shipping notification already sent");
     }
 
     console.log("✅ Manual order notifications processed successfully");

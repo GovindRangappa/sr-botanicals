@@ -32,7 +32,6 @@ type Props = {
     state?: string | null;
     zip?: string | null;
   };
-  labelUrl?: string | null;
   packingSlipUrl?: string | null;
 };
 
@@ -44,7 +43,6 @@ export default function OwnerShippingNotificationEmail({
   products,
   shippingMethod,
   shippingAddress,
-  labelUrl,
   packingSlipUrl,
 }: Props) {
   return (
@@ -126,27 +124,15 @@ export default function OwnerShippingNotificationEmail({
 
           <Hr style={styles.hr} />
 
-          {(labelUrl || packingSlipUrl) && (
+          {packingSlipUrl && (
             <>
               <Heading as="h3" style={styles.subheading}>
                 Shipping Documents
               </Heading>
               <Text style={styles.text}>
-                {labelUrl && (
-                  <>
-                    <Link href={labelUrl} style={styles.link} target="_blank">
-                      Download Shipping Label
-                    </Link>
-                    <br />
-                  </>
-                )}
-                {packingSlipUrl && (
-                  <>
-                    <Link href={packingSlipUrl} style={styles.link} target="_blank">
-                      Download Packing Slip
-                    </Link>
-                  </>
-                )}
+                <Link href={packingSlipUrl} style={styles.link} target="_blank">
+                  Download Packing Slip
+                </Link>
               </Text>
               <Hr style={styles.hr} />
             </>

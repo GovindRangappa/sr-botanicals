@@ -28,7 +28,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       country: 'US',
     },
     address_to: {
-      name: address.name || 'Customer',
+      name: address.name || (address.firstName && address.lastName 
+        ? `${address.firstName} ${address.lastName}`.trim()
+        : 'Customer'),
       street1: address.street,
       city: address.city,
       state: address.state,
@@ -59,6 +61,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     const shipment = await response.json();
+
+    // Check if Shippo returned an error
+    if (!response.ok || shipment.error || !shipment.rates) {
+      console.error('❌ Shippo API error response:', shipment);
+      return res.status(500).json({ error: 'Failed to fetch shipping rates from Shippo', details: shipment });
+    }
     let rates = shipment.rates || [];
 
     // Filter out extremely expensive or redundant options
@@ -82,9 +90,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Sort to find best non-zero rate
     const paidOnly = rates.filter(r => parseFloat(r.amount) > 0);
-    const bestValue = paidOnly.reduce((min, curr) => {
+    const bestValue = paidOnly.length > 0 ? paidOnly.reduce((min, curr) => {
       return parseFloat(curr.amount) < parseFloat(min.amount) ? curr : min;
-    }, paidOnly[0]);
+    }, paidOnly[0]) : null;
 
     // Append custom free delivery options
     rates.push(

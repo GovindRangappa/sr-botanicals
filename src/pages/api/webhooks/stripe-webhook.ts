@@ -3,12 +3,11 @@ import { buffer } from 'micro';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { Shippo } from 'shippo';
 import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmation";
 import { sendOwnerPickupNotificationEmail } from "@/lib/email/sendOwnerPickupNotification";
 import { sendOwnerHandDeliveryNotificationEmail } from "@/lib/email/sendOwnerHandDeliveryNotification";
 import { sendOwnerShippingNotificationEmail } from "@/lib/email/sendOwnerShippingNotification";
-import { sendShipmentConfirmationEmail } from "@/lib/email/sendShipmentConfirmation";
+// ⚠️ sendShipmentConfirmationEmail is NOT used here - shipment emails are only sent from /api/create-shipping-label (manual)
 
 export const config = {
   api: {
@@ -35,7 +34,10 @@ function isHandDelivery(shippingMethod: string | null | undefined): boolean {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  console.log('📩 Incoming Stripe webhook');
+  console.log('📩 [WEBHOOK] Incoming Stripe webhook:', {
+    timestamp: new Date().toISOString(),
+    method: req.method,
+  });
 
   if (req.method !== 'POST') return res.status(405).end('Method Not Allowed');
   
@@ -59,9 +61,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       process.env.STRIPE_WEBHOOK_SECRET!
     );
 
-    console.log('📬 Webhook event received:', {
+    console.log('📬 [WEBHOOK] Webhook event received:', {
       type: event.type,
       id: event.id,
+      timestamp: new Date().toISOString(),
+      message: '⚠️ REMINDER: Labels and shipment emails should NOT be created in webhooks - they are manual now!',
     });
 
     // Handle payment_intent.succeeded for invoice payments
@@ -218,86 +222,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   }
                 }
 
-                // 📦 Create shipping label for paid shipping orders
-                console.log("📦 Checking if order is eligible for Shippo label (payment_intent.succeeded):");
-                console.log(" - shipment_id:", orderToLabel?.shipment_id);
-                console.log(" - shipping_method:", orderToLabel?.shipping_method);
-
-                if (
-                  orderToLabel?.shipment_id &&
-                  orderToLabel.shipping_method !== 'Local Pickup' &&
-                  orderToLabel.shipping_method !== 'Hand Delivery'
-                ) {
-                  try {
-                    const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
-
-                    const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${orderToLabel.shipment_id}`, {
-                      headers: {
-                        Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
-                        'Content-Type': 'application/json',
-                      },
-                    });
-
-                    const shipment = await shipmentRes.json();
-
-                    const rate = shipment.rates.find((r: any) =>
-                      `${r.provider} ${r.servicelevel.name}` === orderToLabel.shipping_method
-                    );
-
-                    if (!rate) {
-                      console.error("❌ Rate matching manual invoice order not found (payment_intent.succeeded)");
-                    } else {
-                      const transaction = await shippo.transactions.create({
-                        rate: rate.object_id,
-                        labelFileType: "PDF",
-                        async: false,
-                      });
-
-                      if (transaction.status === "SUCCESS") {
-                        const { trackingNumber, labelUrl } = transaction;
-
-                        const { error: labelUpdateError } = await supabase
-                          .from('orders')
-                          .update({
-                            tracking_number: trackingNumber,
-                            label_url: labelUrl,
-                          })
-                          .eq('id', orderId);
-
-                        if (labelUpdateError) {
-                          console.error("❗ Failed to update manual invoice order with label (payment_intent.succeeded):", labelUpdateError);
-                        } else {
-                          console.log("✅ Shipping label created & saved for manual invoice order (payment_intent.succeeded)");
-                        }
-
-                        // Send customer shipment email (once)
-                        if (!orderToLabel?.shipment_email_sent) {
-                          try {
-                            await sendShipmentConfirmationEmail({
-                              ...orderToLabel,
-                              tracking_number: trackingNumber,
-                            });
-
-                            await supabase
-                              .from("orders")
-                              .update({ shipment_email_sent: true })
-                              .eq("id", orderId);
-
-                            console.log("✓ Shipment confirmation email sent (payment_intent.succeeded)");
-                          } catch (err) {
-                            console.error("❌ Failed to send shipment email (payment_intent.succeeded):", err);
-                          }
-                        } else {
-                          console.log("ℹ️ Shipment confirmation email already sent");
-                        }
-                      } else {
-                        console.error("❌ Shippo label creation failed (payment_intent.succeeded):", transaction.messages);
-                      }
-                    }
-                  } catch (err) {
-                    console.error("🚨 Error during label creation (payment_intent.succeeded):", err);
-                  }
-                }
+                // 📦 Label creation is now manual - done via admin "Create Label" button
+                // This allows owner to create labels when ready to ship, not when payment is received
+                console.log("🔍 [DEBUG] Payment Intent Succeeded - Label Creation Check:", {
+                  orderId,
+                  shipping_method: orderToLabel?.shipping_method,
+                  shipment_id: orderToLabel?.shipment_id,
+                  label_url: orderToLabel?.label_url,
+                  tracking_number: orderToLabel?.tracking_number,
+                  message: "Label creation should NOT happen here - it's manual now",
+                });
+                // ⚠️ LABEL CREATION SHOULD NOT HAPPEN HERE - IF YOU SEE labels being created, something is wrong!
               }
             }
           } else {
@@ -476,84 +411,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               }
             }
 
-            // 📦 Create shipping label for paid shipping orders
-            console.log("📦 Checking if order is eligible for Shippo label:");
-            console.log(" - shipment_id:", orderToLabel?.shipment_id);
-            console.log(" - shipping_method:", orderToLabel?.shipping_method);
-
-            if (
-              orderToLabel?.shipment_id &&
-              orderToLabel.shipping_method !== 'Local Pickup' &&
-              orderToLabel.shipping_method !== 'Hand Delivery'
-            ) {
-              try {
-                const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
-
-                const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${orderToLabel.shipment_id}`, {
-                  headers: {
-                    Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
-                    'Content-Type': 'application/json',
-                  },
-                });
-
-                const shipment = await shipmentRes.json();
-
-                const rate = shipment.rates.find((r: any) =>
-                  `${r.provider} ${r.servicelevel.name}` === orderToLabel.shipping_method
-                );
-
-                if (!rate) {
-                  console.error("❌ Rate matching manual invoice order not found");
-                } else {
-                  const transaction = await shippo.transactions.create({
-                    rate: rate.object_id,
-                    labelFileType: "PDF",
-                    async: false,
-                  });
-
-                  if (transaction.status === "SUCCESS") {
-                    const { trackingNumber, labelUrl } = transaction;
-
-                    const { error: labelUpdateError } = await supabase
-                      .from('orders')
-                      .update({
-                        tracking_number: trackingNumber,
-                        label_url: labelUrl,
-                      })
-                      .eq('id', orderId);
-
-                    if (labelUpdateError) {
-                      console.error("❗ Failed to update manual invoice order with label:", labelUpdateError);
-                    } else {
-                      console.log("✅ Shipping label created & saved for manual invoice order");
-                    }
-
-                    // Send customer shipment email (once)
-                    if (!orderToLabel?.shipment_email_sent) {
-                      try {
-                        await sendShipmentConfirmationEmail({
-                          ...orderToLabel,
-                          tracking_number: trackingNumber,
-                        });
-
-                        await supabase
-                          .from("orders")
-                          .update({ shipment_email_sent: true })
-                          .eq("id", orderId);
-
-                        console.log("✓ Shipment confirmation email sent");
-                      } catch (err) {
-                        console.error("❌ Failed to send shipment email:", err);
-                      }
-                    }
-                  } else {
-                    console.error("❌ Shippo label creation failed:", transaction.messages);
-                  }
-                }
-              } catch (err) {
-                console.error("🚨 Error during label creation (invoice.paid):", err);
-              }
-            }
+            // 📦 Label creation is now manual - done via admin "Create Label" button
+            // This allows owner to create labels when ready to ship, not when payment is received
+            console.log("🔍 [DEBUG] Invoice Paid - Label Creation Check:", {
+              orderId,
+              shipping_method: orderToLabel?.shipping_method,
+              shipment_id: orderToLabel?.shipment_id,
+              label_url: orderToLabel?.label_url,
+              tracking_number: orderToLabel?.tracking_number,
+              shipment_email_sent: orderToLabel?.shipment_email_sent,
+              message: "Label creation should NOT happen here - it's manual now",
+            });
+            // ⚠️ LABEL CREATION SHOULD NOT HAPPEN HERE - IF YOU SEE labels being created, something is wrong!
+            // ⚠️ SHIPMENT EMAIL SHOULD NOT BE SENT HERE - it's only sent when label is manually created!
           }
         }
       }
@@ -786,84 +656,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         }
 
-        if (orderForLabel.shipment_id && orderForLabel.shipping_method !== 'Local Pickup' && orderForLabel.shipping_method !== 'Hand Delivery') {
-          try {
-            const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
-
-            console.log('🚚 Fetching shipment with ID:', orderForLabel.shipment_id);
-
-            const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${orderForLabel.shipment_id}`, {
-              headers: {
-                Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
-                'Content-Type': 'application/json',
-              },
-            });
-
-            const shipment = await shipmentRes.json();
-
-            console.log('📦 Available rates:', shipment.rates);
-            console.log('🔍 Trying to match shipping_method:', orderForLabel.shipping_method);
-
-            const availableLabels = shipment.rates.map((r: any) => `${r.provider} ${r.servicelevel.name}`);
-            console.log('📬 Rate options available for matching:', availableLabels);
-
-            const rate = shipment.rates.find((r: any) =>
-              `${r.provider} ${r.servicelevel.name}` === orderForLabel.shipping_method
-            );
-
-            if (!rate) {
-              console.error("❌ Rate matching paid order not found");
-            } else {
-              console.log("✅ Matched rate:", rate);
-              const transaction = await shippo.transactions.create({
-                rate: rate.object_id,
-                labelFileType: "PDF",
-                async: false,
-              });
-
-              if (transaction.status === "SUCCESS") {
-                const { trackingNumber, labelUrl } = transaction;
-
-                const { error: labelUpdateError } = await supabase
-                  .from('orders')
-                  .update({
-                    tracking_number: trackingNumber,
-                    label_url: labelUrl,
-                  })
-                  .eq('id', orderForLabel.id);
-
-                if (labelUpdateError) {
-                  console.error("❗ Failed to update order with label:", labelUpdateError);
-                } else {
-                  console.log("✅ Shipping label created & saved");
-                }
-
-                // Send customer shipment email (once)
-                if (!orderForLabel.shipment_email_sent) {
-                  try {
-                    await sendShipmentConfirmationEmail({
-                      ...orderForLabel,
-                      tracking_number: trackingNumber,
-                    });
-
-                    await supabase
-                      .from("orders")
-                      .update({ shipment_email_sent: true })
-                      .eq("id", orderForLabel.id);
-
-                    console.log("✓ Shipment confirmation email sent");
-                  } catch (err) {
-                    console.error("❌ Failed to send shipment email:", err);
-                  }
-                }
-              } else {
-                console.error("❌ Shippo label creation failed:", transaction.messages);
-              }
-            }
-          } catch (err) {
-            console.error("🚨 Error during label creation:", err);
-          }
-        }
+        // 📦 Label creation is now manual - done via admin "Create Label" button
+        // This allows owner to create labels when ready to ship, not when payment is received
+        console.log("🔍 [DEBUG] Checkout Session Completed - Label Creation Check:", {
+          orderId: orderForLabel?.id,
+          checkout_id,
+          shipping_method: orderForLabel?.shipping_method,
+          shipment_id: orderForLabel?.shipment_id,
+          label_url: orderForLabel?.label_url,
+          tracking_number: orderForLabel?.tracking_number,
+          shipment_email_sent: orderForLabel?.shipment_email_sent,
+          message: "Label creation should NOT happen here - it's manual now",
+        });
+        // ⚠️ LABEL CREATION SHOULD NOT HAPPEN HERE - IF YOU SEE labels being created, something is wrong!
+        // ⚠️ SHIPMENT EMAIL SHOULD NOT BE SENT HERE - it's only sent when label is manually created!
       } else {
         console.log(`ℹ️ Order ${orderToUpdate.id} is already paid, skipping update`);
       }

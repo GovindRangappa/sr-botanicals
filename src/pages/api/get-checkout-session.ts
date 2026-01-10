@@ -25,8 +25,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: "Invalid session_id" });
     }
 
-    console.log("🔍 Received session_id:", session_id);
-
     const session = await stripe.checkout.sessions.retrieve(session_id, {
       expand: ["payment_intent.latest_charge"],
     });
@@ -34,10 +32,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Validate session ownership - verify customer email matches if provided
     if (customer_email && session.customer_email) {
       if (session.customer_email.toLowerCase() !== customer_email.toLowerCase()) {
-        console.warn("⚠️ Session email mismatch:", {
-          session_email: session.customer_email,
-          provided_email: customer_email,
-        });
         return res.status(403).json({ message: "Session does not belong to this customer" });
       }
     }
@@ -58,13 +52,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    console.log("📦 Session validated, extracting receipt URL");
+    // Safely extract receipt URL from payment intent
+    let receiptUrl: string | null = null;
+    
+    if (session.payment_intent) {
+      const paymentIntentId = typeof session.payment_intent === 'string' 
+        ? session.payment_intent 
+        : (session.payment_intent as Stripe.PaymentIntent).id;
 
-    const paymentIntent = session.payment_intent as Stripe.PaymentIntent;
-    const latestCharge = paymentIntent.latest_charge as Stripe.Charge;
-    const receiptUrl = latestCharge?.receipt_url;
+      try {
+        // Retrieve payment intent with charge expansion
+        const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+          expand: ['latest_charge'],
+        });
 
-    console.log("🧾 Extracted receipt URL:", receiptUrl);
+        const latestCharge = paymentIntent.latest_charge;
+        
+        if (latestCharge) {
+          if (typeof latestCharge === 'string') {
+            // If it's just an ID, retrieve the charge
+            const charge = await stripe.charges.retrieve(latestCharge);
+            receiptUrl = charge.receipt_url || null;
+          } else {
+            // If it's already expanded
+            receiptUrl = (latestCharge as Stripe.Charge).receipt_url || null;
+          }
+        }
+      } catch (chargeError) {
+        console.error('❌ Error retrieving charge/receipt:', chargeError);
+        // Continue without receipt URL - it's not critical
+      }
+    }
 
     res.status(200).json({ receipt_url: receiptUrl });
   } catch (err: any) {

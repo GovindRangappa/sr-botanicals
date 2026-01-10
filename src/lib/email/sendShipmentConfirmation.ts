@@ -2,6 +2,15 @@ import { resend } from "@/lib/resend";
 import ShipmentConfirmationEmail from "@/emails/ShipmentConfirmationEmail";
 
 export async function sendShipmentConfirmationEmail(order: any) {
+  console.log('📧 [SHIPMENT EMAIL] sendShipmentConfirmationEmail called:', {
+    orderId: order.id,
+    customerEmail: order.customer_email,
+    trackingNumber: order.tracking_number,
+    shippingMethod: order.shipping_method,
+    timestamp: new Date().toISOString(),
+    stackTrace: new Error().stack?.split('\n').slice(1, 4).join('\n'), // Show where this was called from
+  });
+
   // Build shipping address object if available
   const shippingAddress = (order.shipping_street1 || order.shipping_city || order.shipping_state || order.shipping_zip)
     ? {
@@ -15,6 +24,8 @@ export async function sendShipmentConfirmationEmail(order: any) {
 
   // Get estimated days (could be stored as estimated_days or shipping_estimated_days)
   const estimatedDays = order.shipping_estimated_days ?? order.estimated_days ?? null;
+
+  console.log('📧 [SHIPMENT EMAIL] Sending email via Resend...');
 
   return resend.emails.send({
     from: "SR Botanicals <orders@sr-botanicals.com>",

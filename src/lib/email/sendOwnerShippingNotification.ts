@@ -42,7 +42,6 @@ export async function sendOwnerShippingNotificationEmail(order: any, baseUrl?: s
     to,
     orderId: order.id,
     packingSlipUrl,
-    labelUrl: order.label_url || null,
   });
 
   const { data, error } = await resend.emails.send({
@@ -63,7 +62,6 @@ export async function sendOwnerShippingNotificationEmail(order: any, baseUrl?: s
         state: order.shipping_state || null,
         zip: order.shipping_zip || null,
       },
-      labelUrl: order.label_url || null,
       packingSlipUrl,
     }),
   });
