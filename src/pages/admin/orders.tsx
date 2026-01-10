@@ -21,7 +21,7 @@ export default function AdminOrdersPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const stickyScrollbarRef = useRef<HTMLDivElement>(null);
 
-  const allowedEmails = ['ivygovind@gmail.com', 'srbotanicals@gmail.com'];
+  const allowedEmails = ['ivygovind@gmail.com', 'srbotanicals@gmail.com', 'srbotanicals09@gmail.com'];
 
   useEffect(() => {
     async function checkAccessAndFetchOrders() {
