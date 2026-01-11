@@ -4,7 +4,7 @@ import { sendOrderConfirmationEmail } from "@/lib/email/sendOrderConfirmation";
 import { sendOwnerPickupNotificationEmail } from "@/lib/email/sendOwnerPickupNotification";
 import { sendOwnerHandDeliveryNotificationEmail } from "@/lib/email/sendOwnerHandDeliveryNotification";
 import { sendOwnerShippingNotificationEmail } from "@/lib/email/sendOwnerShippingNotification";
-import { sendShipmentConfirmationEmail } from "@/lib/email/sendShipmentConfirmation";
+// ⚠️ sendShipmentConfirmationEmail is NOT used here - shipment emails are only sent from /api/create-shipping-label (manual)
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,

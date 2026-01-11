@@ -1,2 +1,2 @@
-[functions.cleanup-pending-orders]
-schedule = "*/5 * * * *"
+# Cron schedules for Edge Functions are configured via Supabase Dashboard
+# Go to Database > Cron Jobs to set up the schedule
