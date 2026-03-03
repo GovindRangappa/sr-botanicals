@@ -2,8 +2,10 @@ import NavBar from '@/components/NavBar';
 import Footer from '@/components/Footer';
 import ProductCard from '@/components/ProductCard';
 import { supabase } from '@/utils/supabaseClient';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Shop() {
   const router = useRouter();
@@ -12,6 +14,9 @@ export default function Shop() {
   const [shopData, setShopData] = useState<{
     [category: string]: { [subcategory: string]: any[] };
   }>({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     async function fetchProducts() {
@@ -266,6 +271,35 @@ export default function Shop() {
     }
   };
 
+  // Flat list of all products (deduped by slug) for search dropdown
+  const allProducts = useMemo(() => {
+    const seen = new Set<string>();
+    const list: { name: string; slug: string; image?: string }[] = [];
+    for (const subcategories of Object.values(shopData)) {
+      for (const items of Object.values(subcategories)) {
+        for (const p of items) {
+          if (p.slug && !seen.has(p.slug)) {
+            seen.add(p.slug);
+            list.push({
+              name: p.name,
+              slug: p.slug,
+              image: p.image ?? undefined,
+            });
+          }
+        }
+      }
+    }
+    return list;
+  }, [shopData]);
+
+  const filteredProducts = useMemo(() => {
+    if (!searchTerm.trim()) return allProducts;
+    const term = searchTerm.toLowerCase().trim();
+    return allProducts.filter((p) =>
+      p.name && String(p.name).toLowerCase().includes(term)
+    );
+  }, [allProducts, searchTerm]);
+
   return (
     <>
       <style jsx>{`
@@ -356,7 +390,58 @@ export default function Shop() {
 
         {/* Main Content */}
         <main className="flex-1 md:pl-6">
-          <h1 className="text-4xl font-bold text-[#3c2f2f] font-['Playfair_Display'] mb-8 text-center">Shop</h1>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+            <h1 className="text-4xl font-bold text-[#3c2f2f] font-['Playfair_Display'] text-center sm:text-left order-2 sm:order-1">Shop</h1>
+            <div
+              ref={searchContainerRef}
+              className="w-full sm:w-auto sm:min-w-[14rem] order-1 sm:order-2 flex justify-center sm:justify-end relative"
+            >
+              <input
+                type="text"
+                className="border-2 border-[#3c2f2f] p-2 rounded w-full sm:max-w-xs bg-white text-[#3c2f2f] font-['Playfair_Display'] placeholder:text-[#6b5b5b]/70"
+                value={searchTerm}
+                placeholder="Search products..."
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+              />
+              {showDropdown && (
+                <div className="absolute top-full left-0 right-0 mt-1 border border-[#d9d9d9] rounded bg-white shadow-lg max-h-72 overflow-y-auto z-30">
+                  {filteredProducts.length === 0 ? (
+                    <div className="px-4 py-3 text-[#6b5b5b] font-['Playfair_Display'] text-sm">
+                      {searchTerm.trim() ? 'No products match your search.' : 'Type to search products...'}
+                    </div>
+                  ) : (
+                    filteredProducts.map((p) => (
+                      <Link
+                        key={p.slug}
+                        href={`/product/${p.slug}`}
+                        className="flex items-start gap-3 px-3 py-2 hover:bg-[#e5e0d8] border-b border-[#d9d9d9]/50 last:border-b-0 font-['Playfair_Display'] text-[#3c2f2f]"
+                      >
+                        <div className="relative w-10 h-10 flex-shrink-0 rounded overflow-hidden bg-gray-100">
+                          {p.image ? (
+                            <Image
+                              src={p.image}
+                              alt=""
+                              fill
+                              className="object-cover"
+                              sizes="40px"
+                            />
+                          ) : (
+                            <span className="text-gray-400 text-xs flex items-center justify-center w-full h-full">—</span>
+                          )}
+                        </div>
+                        <span className="min-w-0 break-words whitespace-normal">{p.name}</span>
+                      </Link>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           {Object.entries(shopData).map(([category, subcategories]) => (
             <div
