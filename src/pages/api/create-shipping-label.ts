@@ -3,6 +3,7 @@ import { Shippo } from 'shippo';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdmin } from '@/lib/auth/requireAdmin';
 import { sendShipmentConfirmationEmail } from '@/lib/email/sendShipmentConfirmation';
+import { getTotalWeightOzForOrder } from '@/lib/shippo/orderShippingWeight';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -55,10 +56,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'This order does not require a shipping label' });
     }
 
-    if (!order.shipment_id) {
-      return res.status(400).json({ error: 'Order does not have a shipment ID' });
-    }
-
     if (order.status !== 'paid') {
       return res.status(400).json({ error: 'Order must be paid before creating a label' });
     }
@@ -67,42 +64,97 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Label already exists for this order' });
     }
 
-    // Create the label using Shippo
-    const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY! });
+    const street = (order.shipping_street1 || '').trim();
+    const city = (order.shipping_city || '').trim();
+    const state = (order.shipping_state || '').trim();
+    const zip = (order.shipping_zip || '').trim();
+    if (!street || !city || !state || !zip) {
+      return res.status(400).json({ error: 'Order is missing a complete shipping address' });
+    }
 
-    // Fetch the shipment from Shippo
-    const shipmentRes = await fetch(`https://api.goshippo.com/shipments/${order.shipment_id}`, {
+    const recipientName =
+      (order.shipping_name || '').trim() ||
+      `${order.first_name || ''} ${order.last_name || ''}`.trim() ||
+      'Customer';
+
+    // Fresh Shippo shipment at label time so carrier submission date is "now" (avoids UPS SubmissionDateTooOld on stale checkout shipments).
+    const weightOz = await getTotalWeightOzForOrder(supabase, order);
+
+    const shippoToken = process.env.SHIPPO_API_KEY!;
+    const shippoRequest = {
+      address_from: {
+        name: 'SR Botanicals',
+        street1: '2412 Ivy Stone Lane',
+        city: 'Friendswood',
+        state: 'TX',
+        zip: '77546',
+        country: 'US',
+      },
+      address_to: {
+        name: recipientName,
+        street1: street,
+        city,
+        state,
+        zip,
+        country: 'US',
+      },
+      parcels: [
+        {
+          length: '8.6875',
+          width: '5.4375',
+          height: '1.625',
+          distance_unit: 'in',
+          weight: `${weightOz}`,
+          mass_unit: 'oz',
+        },
+      ],
+      async: false,
+    };
+
+    const shipmentRes = await fetch('https://api.goshippo.com/shipments/', {
+      method: 'POST',
       headers: {
-        Authorization: `ShippoToken ${process.env.SHIPPO_API_KEY}`,
+        Authorization: `ShippoToken ${shippoToken}`,
         'Content-Type': 'application/json',
       },
+      body: JSON.stringify(shippoRequest),
     });
 
     const shipment = await shipmentRes.json();
 
-    if (!shipment || !shipment.rates || shipment.rates.length === 0) {
-      return res.status(400).json({ error: 'Failed to retrieve shipment or no rates available' });
-    }
-
-    // Find the matching rate based on shipping method
-    const rate = shipment.rates.find((r: any) =>
-      `${r.provider} ${r.servicelevel?.name || r.servicelevel}` === order.shipping_method
-    );
-
-    if (!rate) {
-      return res.status(400).json({ 
-        error: 'Matching shipping rate not found',
-        availableRates: shipment.rates.map((r: any) => `${r.provider} ${r.servicelevel?.name || r.servicelevel}`)
+    if (!shipmentRes.ok || shipment.error || !shipment.rates?.length) {
+      console.error('❌ [MANUAL LABEL CREATION] Failed to create fresh Shippo shipment:', shipment);
+      return res.status(400).json({
+        error: 'Failed to create shipping shipment for label',
+        details: shipment.messages || shipment.error || shipment,
       });
     }
 
-    // Create the transaction (this creates the label with ship date = today)
-    console.log('🟢 [MANUAL LABEL CREATION] Creating Shippo transaction:', {
+    const rate = shipment.rates.find(
+      (r: any) =>
+        `${r.provider} ${r.servicelevel?.name || r.servicelevel}` === order.shipping_method
+    );
+
+    if (!rate) {
+      return res.status(400).json({
+        error: 'Matching shipping rate not found for this order. Rates may have changed; check available options.',
+        availableRates: shipment.rates.map(
+          (r: any) => `${r.provider} ${r.servicelevel?.name || r.servicelevel}`
+        ),
+      });
+    }
+
+    const shippo = new Shippo({ apiKeyHeader: shippoToken });
+
+    const shipDate = new Date().toISOString().split('T')[0];
+    console.log('🟢 [MANUAL LABEL CREATION] Creating Shippo transaction (fresh shipment):', {
       orderId,
+      shipmentId: shipment.object_id,
       rateId: rate.object_id,
       rateService: rate.servicelevel?.name,
       rateProvider: rate.provider,
-      shipDate: new Date().toISOString().split('T')[0],
+      shipDate,
+      weightOz,
     });
     
     const transaction = await shippo.transactions.create({
@@ -132,12 +184,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { trackingNumber, labelUrl } = transaction;
 
-    // Get current date in YYYY-MM-DD format for ship date
-    const shipDate = new Date().toISOString().split('T')[0];
-
-    // Update the order with label information
+    // Update the order with label information (shipDate = day admin clicked Create label; shipment_id = fresh Shippo shipment)
     // First try with ship_date, if that fails (column doesn't exist), try without it
     let updateData: any = {
+      shipment_id: shipment.object_id,
       tracking_number: trackingNumber,
       label_url: labelUrl,
       ship_date: shipDate,
@@ -154,6 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Try again without ship_date field
       updateData = {
+        shipment_id: shipment.object_id,
         tracking_number: trackingNumber,
         label_url: labelUrl,
       };
@@ -208,6 +259,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       labelUrl,
       trackingNumber,
       shipDate,
+      shipmentId: shipment.object_id,
     });
   } catch (error: any) {
     console.error('🚨 Error creating shipping label:', error);

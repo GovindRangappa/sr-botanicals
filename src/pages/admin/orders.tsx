@@ -283,6 +283,7 @@ export default function AdminOrdersPage() {
           order.id === orderId
             ? {
                 ...order,
+                shipment_id: data.shipmentId ?? order.shipment_id,
                 label_url: data.labelUrl,
                 tracking_number: data.trackingNumber,
                 ship_date: data.shipDate,
