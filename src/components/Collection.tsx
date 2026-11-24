@@ -8,7 +8,7 @@ const items = [
   { name: "Hair Oils", image: "/Collection-2.png", category: "Hair-Oils" },
   { name: "Hair Pomades", image: "/Collection-3.png", category: "Hair-Pomades" },
   { name: "Shampoo Bars", image: "/HibiscusShampooBar.png", category: "Hair-Shampoo-Bars" },
-  { name: "Lip Balm", image: "/LipBalm.png", category: "Lips-Balm" },
+  { name: "Lip Balms", image: "/LipBalm.png", category: "Lips-Balms" },
 ];
 
 export default function Collection() {

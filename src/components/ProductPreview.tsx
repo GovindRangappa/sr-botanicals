@@ -3,11 +3,55 @@ import Image from 'next/image';
 import Link from 'next/link';
 import FadeInOnScroll from '@/components/FadeInOnScroll';
 
-const products = [
-  { name: "Silky Lock Elixir", slug: "silky-lock-elixir", price: "$12", image: "/SilkyLockElixir.png" },
+type PopularProduct = {
+  name: string;
+  slug: string;
+  price: string;
+  image: string;
+  prices?: { size: string; price: string }[];
+};
+
+const products: PopularProduct[] = [
+  {
+    name: "Silky Lock Elixir",
+    slug: "silky-lock-elixir-original",
+    price: "$6.00",
+    image: "/SilkyLockElixir.png",
+    prices: [
+      { size: "4 oz", price: "$6.00" },
+      { size: "8 oz", price: "$12.00" },
+    ],
+  },
   { name: "Wild Rose", slug: "wild-rose", price: "$4.99", image: "/WildRose.png" },
-  { name: "Nourish Lock Pomade", slug: "nourish-lock-pomade", price: "$10.00", image: "/NourishLockPomade.png" },
+  {
+    name: "Nourish Lock Pomade",
+    slug: "nourish-lock-pomade",
+    price: "$10.00",
+    image: "/NourishLockPomade.png",
+    prices: [
+      { size: "4 oz", price: "$10.00" },
+      { size: "8 oz", price: "$20.00" },
+    ],
+  },
 ];
+
+function ProductPrice({ product, className }: { product: PopularProduct; className: string }) {
+  if (product.prices && product.prices.length > 1) {
+    return (
+      <p className={`whitespace-nowrap font-['Playfair_Display'] text-green-800 ${className}`}>
+        {product.prices.map((entry, index) => (
+          <span key={entry.size}>
+            {index > 0 && <span className="mx-2 text-[#3c2f2f]/40">·</span>}
+            <span className="font-normal text-[#3c2f2f]/75">{entry.size}</span>{" "}
+            <span>{entry.price}</span>
+          </span>
+        ))}
+      </p>
+    );
+  }
+
+  return <p className={`text-green-800 font-['Playfair_Display'] ${className}`}>{product.price}</p>;
+}
 
 export default function ProductPreview() {
   return (
@@ -34,7 +78,7 @@ export default function ProductPreview() {
                   <h3 className="text-xl font-semibold font-['Playfair_Display'] text-[#3c2f2f] mb-1">
                     {product.name}
                   </h3>
-                  <p className="text-green-800 font-['Playfair_Display'] text-base">{product.price}</p>
+                  <ProductPrice product={product} className="text-base" />
                 </div>
               </div>
             </Link>
@@ -58,7 +102,7 @@ export default function ProductPreview() {
                   <h3 className="text-2xl font-semibold font-['Playfair_Display'] text-[#3c2f2f] mb-1">
                     {product.name}
                   </h3>
-                  <p className="text-green-800 font-['Playfair_Display'] text-lg">{product.price}</p>
+                  <ProductPrice product={product} className="text-lg" />
                 </div>
               </div>
             </Link>

@@ -20,10 +20,27 @@ export default function Shop() {
 
   useEffect(() => {
     async function fetchProducts() {
-      const { data, error } = await supabase.from('products').select('*');
+      const [{ data, error }, variantsResult] = await Promise.all([
+        supabase.from('products').select('*'),
+        supabase.from('product_variants').select('product_id, size, price, netWeight'),
+      ]);
       if (error) {
         console.error('Error fetching products:', error);
         return;
+      }
+      if (variantsResult.error) {
+        console.error('Error fetching product variants:', variantsResult.error);
+      }
+
+      const variantsByProduct = new Map<string, { size: string; price: number; netWeight: number | null }[]>();
+      for (const variant of variantsResult.data ?? []) {
+        const list = variantsByProduct.get(variant.product_id) ?? [];
+        list.push({
+          size: variant.size,
+          price: Number(variant.price),
+          netWeight: variant.netWeight ?? null,
+        });
+        variantsByProduct.set(variant.product_id, list);
       }
 
       const structuredData: { [category: string]: { [subcategory: string]: any[] } } = {};
@@ -32,7 +49,10 @@ export default function Shop() {
         if (!category || !subcategory) continue;
         if (!structuredData[category]) structuredData[category] = {};
         if (!structuredData[category][subcategory]) structuredData[category][subcategory] = [];
-        structuredData[category][subcategory].push(product);
+        structuredData[category][subcategory].push({
+          ...product,
+          variants: variantsByProduct.get(product.id) ?? [],
+        });
       }
 
       setShopData(structuredData);
